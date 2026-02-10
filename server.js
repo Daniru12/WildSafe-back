@@ -12,12 +12,20 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-    .then(() => console.log('MongoDB connected successfully'))
-    .catch((err) => console.error('MongoDB connection error:', err));
+// Improve mongoose debug & connection handling
+mongoose.set('strictQuery', false);
 
-// Routes
+// Global error handlers
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Express routes and middleware registered after DB connection
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/incidents', require('./routes/incidentRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
@@ -29,11 +37,25 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    console.error('Unhandled route error:', err.stack || err);
     res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+// Start server only after successful DB connection
+const startServer = async () => {
+    try {
+        console.log('Connecting to MongoDB...');
+        await mongoose.connect(process.env.MONGODB_URI);
+        console.log('MongoDB connected successfully');
+
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } catch (err) {
+        console.error('MongoDB connection error:', err);
+        // exit so process manager can restart or you can fix the URI
+        process.exit(1);
+    }
+};
+
+startServer();
