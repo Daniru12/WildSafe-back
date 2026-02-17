@@ -1,6 +1,16 @@
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
+// Check if Cloudinary credentials are available
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    console.warn('Cloudinary credentials not found. Image upload will be disabled.');
+    module.exports = {
+        cloudinary: null,
+        storage: null
+    };
+    return;
+}
+
 // Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,

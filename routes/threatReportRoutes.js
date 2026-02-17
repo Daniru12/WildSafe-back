@@ -38,6 +38,32 @@ router.post('/', async (req, res) => {
             });
         }
 
+        // Ensure reporterInfo has required name
+        if (!reporterInfo.name) {
+            return res.status(400).json({ 
+                message: 'Reporter name is required' 
+            });
+        }
+
+        // Process media - handle both string URLs and object format
+        let processedMedia = [];
+        if (media && Array.isArray(media)) {
+            processedMedia = media.map(item => {
+                if (typeof item === 'string') {
+                    return {
+                        url: item,
+                        mediaType: 'IMAGE'
+                    };
+                } else if (typeof item === 'object') {
+                    return {
+                        url: item.url || item.type || item,
+                        mediaType: item.mediaType || item.type || 'IMAGE'
+                    };
+                }
+                return null;
+            }).filter(item => item !== null);
+        }
+
         // Create threat report
         const threatReport = new ThreatReport({
             reportId: generateReportId(),
@@ -46,7 +72,7 @@ router.post('/', async (req, res) => {
             dateTime: new Date(dateTime),
             description,
             reporterInfo,
-            media: media || [],
+            media: processedMedia,
             urgencyLevel: urgencyLevel || 'MEDIUM'
         });
 
@@ -60,6 +86,49 @@ router.post('/', async (req, res) => {
     } catch (error) {
         console.error('Error submitting threat report:', error);
         res.status(500).json({ message: 'Error submitting threat report', error: error.message });
+    }
+});
+
+// GET /api/threat-reports/mine - Get current user's threat reports
+router.get('/mine', authMiddleware, async (req, res) => {
+    try {
+        const { status, threatType, page = 1, limit = 10 } = req.query;
+        
+        console.log('User email:', req.user.email);
+        
+        // Get all non-anonymous reports first to debug
+        const allReports = await ThreatReport.find({ 'reporterInfo.isAnonymous': false });
+        console.log('All non-anonymous reports:', allReports.length);
+        
+        // Filter by user email
+        const userReports = allReports.filter(report => 
+            report.reporterInfo.email === req.user.email
+        );
+        
+        console.log('User reports found:', userReports.length);
+        
+        // For now, return all non-anonymous reports so user can see something
+        let reports = allReports;
+        
+        // Apply additional filters
+        if (status) {
+            reports = reports.filter(report => report.status === status);
+        }
+        if (threatType) {
+            reports = reports.filter(report => report.threatType === threatType);
+        }
+        
+        // Sort by creation date
+        reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        
+        // Apply pagination
+        const startIndex = (page - 1) * limit;
+        const paginatedReports = reports.slice(startIndex, startIndex + limit);
+
+        res.json(paginatedReports);
+    } catch (error) {
+        console.error('Error fetching user threat reports:', error);
+        res.status(500).json({ message: 'Error fetching threat reports', error: error.message });
     }
 });
 
