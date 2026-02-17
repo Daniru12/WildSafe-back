@@ -5,7 +5,13 @@ const Incident = require('../models/Incident');
 // @access  Private (Citizen)
 exports.createIncident = async (req, res) => {
     try {
-        const { title, description, category, location, photos } = req.body;
+        const { title, description, category, location } = req.body;
+        
+        // Get uploaded image URLs from req.files (if any)
+        let photos = [];
+        if (req.files && req.files.length > 0) {
+            photos = req.files.map(file => file.path); // Cloudinary URLs
+        }
 
         const incident = await Incident.create({
             title,
