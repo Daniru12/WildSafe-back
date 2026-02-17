@@ -29,9 +29,12 @@ process.on('unhandledRejection', (reason, promise) => {
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/incidents', require('./routes/incidentRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
+
+
 app.use('/api/threat-reports', require('./routes/threatReportRoutes'));
 app.use('/api/cases', require('./routes/caseRoutes'));
 app.use('/api/assignment', require('./routes/assignmentRoutes'));
+
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 
 // Basic Route
