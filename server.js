@@ -37,6 +37,10 @@ app.use('/api/assignment', require('./routes/assignmentRoutes'));
 
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 
+// Resource & Staff management routes (centralized under routes/resourceStaff)
+app.use('/api/staff', require('./routes/resourceStaff/staffRoutes'));
+app.use('/api/resources', require('./routes/resourceStaff/resourceRoutes'));
+
 // Basic Route
 app.get('/', (req, res) => {
     res.send('WildSafe API is running...');
