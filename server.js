@@ -36,6 +36,7 @@ app.use('/api/cases', require('./routes/caseRoutes'));
 app.use('/api/assignment', require('./routes/assignmentRoutes'));
 
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/ranger', require('./routes/rangerRoutes'));
 
 // Resource & Staff management routes (centralized under routes/resourceStaff)
 app.use('/api/staff', require('./routes/resourceStaff/staffRoutes'));
