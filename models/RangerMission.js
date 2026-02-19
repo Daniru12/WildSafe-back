@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const RANGER_STATUS = [
     'ASSIGNED',
     'ACCEPTED',
+    'DECLINED',
     'EN_ROUTE',
     'ON_SITE',
     'ACTION_TAKEN',
