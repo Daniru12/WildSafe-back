@@ -17,7 +17,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['INCIDENT_UPDATE', 'ASSIGNMENT', 'ALERT', 'SYSTEM', 'CASE_UPDATE', 'NEW_INCIDENT'],
+    enum: ['INCIDENT_UPDATE', 'ASSIGNMENT', 'SYSTEM', 'CASE_UPDATE', 'NEW_INCIDENT'],
     default: 'SYSTEM'
   },
   priority: {
