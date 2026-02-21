@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authMiddleware, roleMiddleware } = require('../middleware/auth');
+const { authMiddleware, roleMiddleware } = require('../../middleware/auth');
 const resourceController = require('../controllers/resourceStaff/resourceController');
 
 router.post('/', authMiddleware, roleMiddleware(['ADMIN','OFFICER']), resourceController.createResource);
