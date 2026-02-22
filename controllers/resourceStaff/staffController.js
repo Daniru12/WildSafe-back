@@ -12,6 +12,10 @@ const createStaff = async (req, res) => {
         if (existing) return res.status(400).json({ message: 'Staff already assigned' });
 
         const staff = await Staff.create({ userId, department, permissions });
+
+        // Automatically promote user role to OFFICER
+        await User.findByIdAndUpdate(userId, { role: 'OFFICER' });
+
         res.status(201).json(staff);
     } catch (err) {
         res.status(500).json({ message: 'Server error', error: err.message });
