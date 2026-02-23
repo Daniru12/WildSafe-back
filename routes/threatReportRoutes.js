@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ThreatReport = require('../models/ThreatReport');
 const Case = require('../models/Case');
-const { authMiddleware } = require('../middleware/auth');
+const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 
 // Generate unique report ID
 const generateReportId = () => {
@@ -94,38 +94,21 @@ router.get('/mine', authMiddleware, async (req, res) => {
     try {
         const { status, threatType, page = 1, limit = 10 } = req.query;
         
-        console.log('User email:', req.user.email);
-        
-        // Get all non-anonymous reports first to debug
-        const allReports = await ThreatReport.find({ 'reporterInfo.isAnonymous': false });
-        console.log('All non-anonymous reports:', allReports.length);
-        
-        // Filter by user email
-        const userReports = allReports.filter(report => 
-            report.reporterInfo.email === req.user.email
-        );
-        
-        console.log('User reports found:', userReports.length);
-        
-        // For now, return all non-anonymous reports so user can see something
-        let reports = allReports;
+        // Build query for user's reports
+        let query = { 'reporterInfo.email': req.user.email };
         
         // Apply additional filters
-        if (status) {
-            reports = reports.filter(report => report.status === status);
-        }
-        if (threatType) {
-            reports = reports.filter(report => report.threatType === threatType);
-        }
-        
-        // Sort by creation date
-        reports.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        
-        // Apply pagination
-        const startIndex = (page - 1) * limit;
-        const paginatedReports = reports.slice(startIndex, startIndex + limit);
+        if (status) query.status = status;
+        if (threatType) query.threatType = threatType;
 
-        res.json(paginatedReports);
+        const reports = await ThreatReport.find(query)
+            .sort({ createdAt: -1 })
+            .limit(limit * 1)
+            .skip((page - 1) * limit);
+
+        const total = await ThreatReport.countDocuments(query);
+        
+        res.json(reports);
     } catch (error) {
         console.error('Error fetching user threat reports:', error);
         res.status(500).json({ message: 'Error fetching threat reports', error: error.message });
@@ -133,7 +116,7 @@ router.get('/mine', authMiddleware, async (req, res) => {
 });
 
 // GET /api/threat-reports - Get all threat reports (admin/officer only)
-router.get('/', authMiddleware, async (req, res) => {
+router.get('/', authMiddleware, roleMiddleware(['OFFICER', 'ADMIN']), async (req, res) => {
     try {
         const { status, threatType, page = 1, limit = 10 } = req.query;
         const filter = {};
@@ -171,6 +154,11 @@ router.get('/:reportId', authMiddleware, async (req, res) => {
             return res.status(404).json({ message: 'Threat report not found' });
         }
 
+        // Check if user is the reporter or an officer/admin
+        if (report.reporterInfo.email !== req.user.email && !['OFFICER', 'ADMIN'].includes(req.user.role)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         res.json(report);
     } catch (error) {
         console.error('Error fetching threat report:', error);
@@ -179,7 +167,7 @@ router.get('/:reportId', authMiddleware, async (req, res) => {
 });
 
 // PUT /api/threat-reports/:reportId/validate - Validate threat report (admin/officer only)
-router.put('/:reportId/validate', authMiddleware, async (req, res) => {
+router.put('/:reportId/validate', authMiddleware, roleMiddleware(['OFFICER', 'ADMIN']), async (req, res) => {
     try {
         const { status, validationNotes } = req.body;
         
@@ -234,7 +222,7 @@ router.put('/:reportId/validate', authMiddleware, async (req, res) => {
 });
 
 // GET /api/threat-reports/stats - Get threat report statistics
-router.get('/stats/overview', authMiddleware, async (req, res) => {
+router.get('/stats/overview', authMiddleware, roleMiddleware(['OFFICER', 'ADMIN']), async (req, res) => {
     try {
         const stats = await ThreatReport.aggregate([
             {
