@@ -209,8 +209,327 @@ const declineMission = async (req, res) => {
     }
 };
 
+// ---------- Case detail, start mission, arrive on site, action taken ----------
+
+/**
+ * GET /api/ranger/cases/:caseId - Full case detail for ranger (Case + ThreatReport + RangerMission)
+ */
+const getCaseDetail = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const userId = req.user.id;
+
+        const caseDoc = await Case.findOne({ caseId })
+            .populate('threatReportId')
+            .lean();
+        if (!caseDoc) {
+            return res.status(404).json({ message: 'Case not found' });
+        }
+        if (caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case is not assigned to you' });
+        }
+
+        let mission = await RangerMission.findOne({ caseId, assignedTo: userId });
+        if (!mission) {
+            mission = await RangerMission.create({
+                caseId,
+                assignedTo: userId,
+                rangerStatus: 'ASSIGNED',
+                rangerStatusHistory: [{ status: 'ASSIGNED', changedAt: new Date() }]
+            });
+        }
+
+        const threatReport = caseDoc.threatReportId || {};
+        res.json({
+            caseId: caseDoc.caseId,
+            threatType: caseDoc.threatType,
+            location: caseDoc.location,
+            priority: caseDoc.priority,
+            status: caseDoc.status,
+            dateTime: caseDoc.dateTime,
+            reporterInfo: caseDoc.reporterInfo,
+            description: threatReport.description,
+            media: threatReport.media,
+            rangerStatus: mission.rangerStatus,
+            rangerStatusHistory: mission.rangerStatusHistory,
+            evidence: mission.evidence,
+            createdAt: caseDoc.createdAt
+        });
+    } catch (error) {
+        console.error('Error fetching ranger case detail:', error);
+        res.status(500).json({ message: 'Error fetching case detail', error: error.message });
+    }
+};
+
+/**
+ * POST /api/ranger/cases/:caseId/start-mission - Set EN_ROUTE (from ACCEPTED)
+ */
+const startMission = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const userId = req.user.id;
+
+        const caseDoc = await Case.findOne({ caseId });
+        if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case not found or not assigned to you' });
+        }
+
+        const updated = await RangerMission.findOneAndUpdate(
+            { caseId, assignedTo: userId, rangerStatus: 'ACCEPTED' },
+            {
+                $set: { rangerStatus: 'EN_ROUTE', updatedAt: new Date() },
+                $push: { rangerStatusHistory: { status: 'EN_ROUTE', changedAt: new Date(), changedBy: userId } }
+            },
+            { new: true }
+        );
+        if (!updated) {
+            return res.status(400).json({ message: 'Mission can only be started when status is ACCEPTED' });
+        }
+        res.json({ message: 'Mission started', caseId, rangerStatus: updated.rangerStatus });
+    } catch (error) {
+        console.error('Error starting mission:', error);
+        res.status(500).json({ message: 'Error starting mission', error: error.message });
+    }
+};
+
+/**
+ * POST /api/ranger/cases/:caseId/arrive-on-site - Set ON_SITE (from EN_ROUTE). Body: { notes }
+ */
+const arriveOnSite = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const { notes } = req.body || {};
+        const userId = req.user.id;
+
+        const caseDoc = await Case.findOne({ caseId });
+        if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case not found or not assigned to you' });
+        }
+
+        const updated = await RangerMission.findOneAndUpdate(
+            { caseId, assignedTo: userId, rangerStatus: 'EN_ROUTE' },
+            {
+                $set: { rangerStatus: 'ON_SITE', updatedAt: new Date() },
+                $push: {
+                    rangerStatusHistory: {
+                        status: 'ON_SITE',
+                        changedAt: new Date(),
+                        changedBy: userId,
+                        notes: notes || ''
+                    }
+                }
+            },
+            { new: true }
+        );
+        if (!updated) {
+            return res.status(400).json({ message: 'Can only arrive on site when status is EN_ROUTE' });
+        }
+        res.json({ message: 'Arrived on site', caseId, rangerStatus: updated.rangerStatus });
+    } catch (error) {
+        console.error('Error arriving on site:', error);
+        res.status(500).json({ message: 'Error arriving on site', error: error.message });
+    }
+};
+
+/**
+ * POST /api/ranger/cases/:caseId/action-taken - Set ACTION_TAKEN (from ON_SITE)
+ */
+const actionTaken = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const userId = req.user.id;
+
+        const caseDoc = await Case.findOne({ caseId });
+        if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case not found or not assigned to you' });
+        }
+
+        const updated = await RangerMission.findOneAndUpdate(
+            { caseId, assignedTo: userId, rangerStatus: 'ON_SITE' },
+            {
+                $set: { rangerStatus: 'ACTION_TAKEN', updatedAt: new Date() },
+                $push: { rangerStatusHistory: { status: 'ACTION_TAKEN', changedAt: new Date(), changedBy: userId } }
+            },
+            { new: true }
+        );
+        if (!updated) {
+            return res.status(400).json({ message: 'Can only mark action taken when status is ON_SITE' });
+        }
+        res.json({ message: 'Action taken recorded', caseId, rangerStatus: updated.rangerStatus });
+    } catch (error) {
+        console.error('Error recording action taken:', error);
+        res.status(500).json({ message: 'Error recording action taken', error: error.message });
+    }
+};
+
+// ---------- Evidence upload ----------
+
+/**
+ * POST /api/ranger/cases/:caseId/evidence - Upload evidence (photos, notes, condition, GPS). Requires ON_SITE or later.
+ * Multipart: files (photos), body: description, notes, conditionSummary, gpsLat, gpsLng (or JSON gps)
+ */
+const addEvidence = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const userId = req.user.id;
+        const { description, notes, conditionSummary, gpsLat, gpsLng } = req.body || {};
+
+        const caseDoc = await Case.findOne({ caseId });
+        if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case not found or not assigned to you' });
+        }
+
+        const mission = await RangerMission.findOne({ caseId, assignedTo: userId });
+        if (!mission) {
+            return res.status(404).json({ message: 'Ranger mission not found' });
+        }
+        const allowed = ['ON_SITE', 'ACTION_TAKEN'];
+        if (!allowed.includes(mission.rangerStatus)) {
+            return res.status(400).json({
+                message: 'Evidence can only be added when status is ON_SITE or ACTION_TAKEN'
+            });
+        }
+
+        const files = req.files || [];
+        const gps =
+            gpsLat != null && gpsLng != null
+                ? { lat: Number(gpsLat), lng: Number(gpsLng) }
+                : undefined;
+
+        const evidenceItems = [];
+        for (const f of files) {
+            const url = f.filename ? `/uploads/ranger/${f.filename}` : (f.path || f.location || f.url || '');
+            evidenceItems.push({
+                url: url || `/uploads/ranger/${Date.now()}`,
+                evidenceType: (f.mimetype || '').startsWith('video/') ? 'VIDEO' : 'PHOTO',
+                description: description || '',
+                notes: notes || '',
+                conditionSummary: conditionSummary || '',
+                gps,
+                uploadedAt: new Date(),
+                uploadedBy: userId
+            });
+        }
+        if (evidenceItems.length === 0 && (description || notes || conditionSummary)) {
+            evidenceItems.push({
+                url: 'text-report',
+                evidenceType: 'REPORT',
+                description: description || '',
+                notes: notes || '',
+                conditionSummary: conditionSummary || '',
+                gps,
+                uploadedAt: new Date(),
+                uploadedBy: userId
+            });
+        }
+
+        if (evidenceItems.length === 0) {
+            return res.status(400).json({ message: 'Provide at least one photo or description/notes' });
+        }
+
+        await RangerMission.findOneAndUpdate(
+            { caseId, assignedTo: userId },
+            { $push: { evidence: { $each: evidenceItems } }, $set: { updatedAt: new Date() } }
+        );
+
+        const updated = await RangerMission.findOne({ caseId, assignedTo: userId })
+            .select('evidence')
+            .lean();
+        res.json({ message: 'Evidence added', caseId, evidence: updated.evidence });
+    } catch (error) {
+        console.error('Error adding evidence:', error);
+        res.status(500).json({ message: 'Error adding evidence', error: error.message });
+    }
+};
+
+// ---------- Close case ----------
+
+/**
+ * POST /api/ranger/cases/:caseId/close - Close case with solution and proof. Syncs to Case for Case Management.
+ * Body: actionTaken, solutionProvided, proofUrls (array), dateTime (optional)
+ */
+const closeCase = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const { actionTaken, solutionProvided, proofUrls = [], dateTime } = req.body || {};
+        const userId = req.user.id;
+
+        if (!actionTaken || !solutionProvided) {
+            return res.status(400).json({ message: 'actionTaken and solutionProvided are required' });
+        }
+
+        const caseDoc = await Case.findOne({ caseId });
+        if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case not found or not assigned to you' });
+        }
+
+        const mission = await RangerMission.findOne({ caseId, assignedTo: userId });
+        if (!mission) {
+            return res.status(404).json({ message: 'Ranger mission not found' });
+        }
+        const allowed = ['ON_SITE', 'ACTION_TAKEN'];
+        if (!allowed.includes(mission.rangerStatus)) {
+            return res.status(400).json({
+                message: 'Case can only be closed when status is ON_SITE or ACTION_TAKEN'
+            });
+        }
+
+        const resolvedAt = dateTime ? new Date(dateTime) : new Date();
+
+        await RangerMission.findOneAndUpdate(
+            { caseId, assignedTo: userId },
+            {
+                $set: {
+                    rangerStatus: 'CLOSED',
+                    resolution: {
+                        actionSummary: actionTaken,
+                        outcome: solutionProvided,
+                        proofUrls: Array.isArray(proofUrls) ? proofUrls : [],
+                        resolvedAt,
+                        resolvedBy: userId
+                    },
+                    updatedAt: new Date()
+                },
+                $push: {
+                    rangerStatusHistory: {
+                        status: 'CLOSED',
+                        changedAt: new Date(),
+                        changedBy: userId
+                    }
+                }
+            }
+        );
+
+        caseDoc.resolution = {
+            actionSummary: actionTaken,
+            outcome: solutionProvided,
+            resolvedAt,
+            resolvedBy: userId
+        };
+        caseDoc.status = 'RESOLVED';
+        caseDoc.updatedAt = new Date();
+        await caseDoc.save();
+
+        res.json({
+            message: 'Case closed successfully',
+            caseId,
+            rangerStatus: 'CLOSED',
+            caseStatus: caseDoc.status
+        });
+    } catch (error) {
+        console.error('Error closing case:', error);
+        res.status(500).json({ message: 'Error closing case', error: error.message });
+    }
+};
+
 module.exports = {
     getMyAssignedCases,
     acceptMission,
-    declineMission
+    declineMission,
+    getCaseDetail,
+    startMission,
+    arriveOnSite,
+    actionTaken,
+    addEvidence,
+    closeCase
 };
