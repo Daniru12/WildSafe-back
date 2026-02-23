@@ -2,12 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 const rangerController = require('../controllers/rangerController');
+const { rangerEvidenceUpload } = require('../middleware/rangerUpload');
 
 // All ranger routes require auth and OFFICER or ADMIN role
 router.use(authMiddleware);
 router.use(roleMiddleware(['OFFICER', 'ADMIN']));
 
-// Stub: confirm ranger API is mounted (Day 1)
+// Stub: confirm ranger API is mounted 
 router.get('/', (req, res) => {
     res.json({ message: 'Ranger API ok', user: req.user?.name });
 });
@@ -15,10 +16,37 @@ router.get('/', (req, res) => {
 // My assigned cases (creates RangerMission if missing). Query: rangerStatus, page, limit
 router.get('/cases', rangerController.getMyAssignedCases);
 
+// Case detail for ranger 
+router.get('/cases/:caseId', rangerController.getCaseDetail);
+
 // Accept mission (only when ASSIGNED)
 router.post('/cases/:caseId/accept', rangerController.acceptMission);
 
 // Decline mission (only when ASSIGNED); unassigns case. Body: { declineReason }
 router.post('/cases/:caseId/decline', rangerController.declineMission);
+
+// Start mission -> EN_ROUTE 
+router.post('/cases/:caseId/start-mission', rangerController.startMission);
+
+// Arrive on site -> ON_SITE . Body: { notes }
+router.post('/cases/:caseId/arrive-on-site', rangerController.arriveOnSite);
+
+// Action taken -> ACTION_TAKEN 
+router.post('/cases/:caseId/action-taken', rangerController.actionTaken);
+
+// Upload evidence - multipart photos + body: description, notes, conditionSummary, gpsLat, gpsLng (Day 4)
+router.post(
+    '/cases/:caseId/evidence',
+    (req, res, next) => {
+        rangerEvidenceUpload(req, res, (err) => {
+            if (err) return res.status(400).json({ message: err.message || 'Upload failed' });
+            next();
+        });
+    },
+    rangerController.addEvidence
+);
+
+// Close case with solution and proof; syncs to Case . Body: actionTaken, solutionProvided, proofUrls[], dateTime?
+router.post('/cases/:caseId/close', rangerController.closeCase);
 
 module.exports = router;
