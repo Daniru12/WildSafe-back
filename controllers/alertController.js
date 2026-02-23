@@ -1,30 +1,31 @@
 const Alert = require('../models/Alert');
 const User = require('../models/User');
+const SmartAlertService = require('../services/smartAlertService');
 
 // Get all alerts for the logged-in user
 exports.getAlerts = async (req, res) => {
   try {
     const { category, priority, limit = 50, page = 1 } = req.query;
-    
+
     // Build filter for alerts targeting user's role
     const filter = {
       targetRoles: req.user.role,
       isActive: true
     };
-    
+
     // Add expired check
     filter.$or = [
       { expiresAt: { $exists: false } },
       { expiresAt: null },
       { expiresAt: { $gt: new Date() } }
     ];
-    
+
     if (category) filter.category = category;
     if (priority) filter.priority = priority;
-    
+
     // Calculate pagination
     const skip = (page - 1) * limit;
-    
+
     // Get alerts
     const alerts = await Alert.find(filter)
       .populate('createdBy', 'name email role')
@@ -32,10 +33,10 @@ exports.getAlerts = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(skip);
-    
+
     // Get total count
     const total = await Alert.countDocuments(filter);
-    
+
     res.json({
       alerts,
       pagination: {
@@ -63,7 +64,7 @@ exports.getUnreadCount = async (req, res) => {
         { expiresAt: { $gt: new Date() } }
       ]
     });
-    
+
     res.json({ count });
   } catch (error) {
     console.error('Error fetching alert count:', error);
@@ -84,7 +85,7 @@ exports.getAlertStats = async (req, res) => {
           { expiresAt: { $gt: new Date() } }
         ]
       }),
-      
+
       Alert.aggregate([
         {
           $match: {
@@ -99,7 +100,7 @@ exports.getAlertStats = async (req, res) => {
         },
         { $group: { _id: '$category', count: { $sum: 1 } } }
       ]),
-      
+
       Alert.aggregate([
         {
           $match: {
@@ -115,7 +116,7 @@ exports.getAlertStats = async (req, res) => {
         { $group: { _id: '$priority', count: { $sum: 1 } } }
       ])
     ]);
-    
+
     res.json({
       totalCount,
       byCategory: byCategory.reduce((acc, item) => {
@@ -136,7 +137,7 @@ exports.getAlertStats = async (req, res) => {
 // Mark an alert as read (not supported in simplified model)
 exports.markAsRead = async (req, res) => {
   try {
-    res.json({ 
+    res.json({
       message: 'Alert acknowledgment received',
       note: 'Individual read tracking not supported in current model'
     });
@@ -149,7 +150,7 @@ exports.markAsRead = async (req, res) => {
 // Mark all alerts as read (not supported in simplified model)
 exports.markAllAsRead = async (req, res) => {
   try {
-    res.json({ 
+    res.json({
       message: 'All alerts acknowledgment received',
       note: 'Individual read tracking not supported in current model'
     });
@@ -185,6 +186,11 @@ exports.sendEmergencyAlert = async (req, res) => {
       status: 'ACTIVE'
     });
 
+    // Trigger geo-alert notifications + awareness for nearby users (fire-and-forget)
+    SmartAlertService.handleNewAlert(alert).catch(err =>
+      console.error('[sendEmergencyAlert] handleNewAlert error:', err)
+    );
+
     res.status(201).json({
       message: `Emergency alert sent to ${targetUserCount} users`,
       alert,
@@ -199,15 +205,15 @@ exports.sendEmergencyAlert = async (req, res) => {
 // Send custom alert to specific roles
 exports.sendCustomAlert = async (req, res) => {
   try {
-    const { 
-      targetRoles = ['OFFICER'], 
-      title, 
-      message, 
-      category = 'INFO', 
-      priority = 'MEDIUM', 
-      location, 
+    const {
+      targetRoles = ['OFFICER'],
+      title,
+      message,
+      category = 'INFO',
+      priority = 'MEDIUM',
+      location,
       expiresAt,
-      relatedIncident 
+      relatedIncident
     } = req.body;
 
     if (!Array.isArray(targetRoles) || targetRoles.length === 0) {
@@ -243,6 +249,11 @@ exports.sendCustomAlert = async (req, res) => {
       status: 'ACTIVE'
     });
 
+    // Trigger geo-alert notifications + awareness for nearby users (fire-and-forget)
+    SmartAlertService.handleNewAlert(alert).catch(err =>
+      console.error('[sendCustomAlert] handleNewAlert error:', err)
+    );
+
     res.status(201).json({
       message: `Alert sent to ${targetUserCount} users`,
       alert,
@@ -257,11 +268,11 @@ exports.sendCustomAlert = async (req, res) => {
 // Send system-wide announcement
 exports.sendAnnouncement = async (req, res) => {
   try {
-    const { 
-      title, 
-      message, 
-      targetRoles = ['CITIZEN', 'OFFICER', 'ADMIN'], 
-      expiresAt 
+    const {
+      title,
+      message,
+      targetRoles = ['CITIZEN', 'OFFICER', 'ADMIN'],
+      expiresAt
     } = req.body;
 
     if (!title || !message) {
@@ -381,8 +392,8 @@ exports.getLocationBasedAlerts = async (req, res) => {
         { expiresAt: { $gt: new Date() } }
       ]
     })
-    .populate('createdBy', 'name role')
-    .sort({ createdAt: -1 });
+      .populate('createdBy', 'name role')
+      .sort({ createdAt: -1 });
 
     res.json({
       alerts,

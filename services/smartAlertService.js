@@ -1,9 +1,11 @@
 const Alert = require('../models/Alert');
 const User = require('../models/User');
 const Incident = require('../models/Incident');
+const Notification = require('../models/Notification');
+const AwarenessContent = require('../models/awareness/AwarenessContent');
 
 class SmartAlertService {
-  
+
   // Auto-generate alerts based on incident severity
   static async createIncidentAlert(incident) {
     try {
@@ -162,7 +164,7 @@ class SmartAlertService {
         return null;
       }
 
-      const message = action === 'enter' 
+      const message = action === 'enter'
         ? `You have entered ${area.name}. ${area.alertMessage || ''}`
         : `You have left ${area.name}. ${area.exitMessage || ''}`;
 
@@ -198,17 +200,17 @@ class SmartAlertService {
   // Send scheduled alerts
   static async createScheduledAlert(scheduleData) {
     try {
-      const { 
-        title, 
-        message, 
-        category, 
-        priority, 
-        targetRoles, 
-        targetUserIds, 
+      const {
+        title,
+        message,
+        category,
+        priority,
+        targetRoles,
+        targetUserIds,
         scheduledBy,
         expiresAt,
         tags,
-        metadata 
+        metadata
       } = scheduleData;
 
       let users = [];
@@ -297,28 +299,28 @@ class SmartAlertService {
         responseStats
       ] = await Promise.all([
         Alert.countDocuments(match),
-        
+
         Alert.aggregate([
           { $match: match },
           { $group: { _id: '$category', count: { $sum: 1 } } }
         ]),
-        
+
         Alert.aggregate([
           { $match: match },
           { $group: { _id: '$priority', count: { $sum: 1 } } }
         ]),
-        
+
         Alert.aggregate([
           { $match: match },
-          { 
-            $group: { 
-              _id: { $hour: '$createdAt' }, 
-              count: { $sum: 1 } 
-            } 
+          {
+            $group: {
+              _id: { $hour: '$createdAt' },
+              count: { $sum: 1 }
+            }
           },
           { $sort: { '_id': 1 } }
         ]),
-        
+
         Alert.aggregate([
           { $match: match },
           { $unwind: '$targetUsers' },
@@ -343,7 +345,7 @@ class SmartAlertService {
         ])
       ]);
 
-      const responseRate = responseStats[0] 
+      const responseRate = responseStats[0]
         ? (responseStats[0].readCount / responseStats[0].totalRecipients * 100)
         : 0;
 
@@ -366,6 +368,102 @@ class SmartAlertService {
       };
     } catch (error) {
       console.error('Error getting alert analytics:', error);
+      throw error;
+    }
+  }
+
+  // -------------------------------------------------------
+  // Integration entry-point: called whenever a new alert is
+  // created. Finds affected users nearby and fires geo-alert
+  // notifications, attaching relevant awareness content.
+  //
+  // alertData shape:
+  //   { _id, title, type, location: { type:'Point', coordinates:[lng,lat] } }
+  // radiusKm defaults to 10 km.
+  // -------------------------------------------------------
+  static async handleNewAlert(alertData, radiusKm = 10) {
+    try {
+      const radiusMeters = radiusKm * 1000;
+
+      // 1. Find users who have a location within the radius
+      //    Fall back to all ACTIVE users if no location is set on the alert.
+      let nearbyUsers = [];
+
+      if (
+        alertData.location &&
+        alertData.location.coordinates &&
+        alertData.location.coordinates.length === 2
+      ) {
+        nearbyUsers = await User.find({
+          status: 'ACTIVE',
+          location: {
+            $near: {
+              $geometry: {
+                type: 'Point',
+                coordinates: alertData.location.coordinates
+              },
+              $maxDistance: radiusMeters
+            }
+          }
+        }).select('_id');
+      } else {
+        // No geo — notify all active citizens and officers
+        nearbyUsers = await User.find({
+          status: 'ACTIVE',
+          role: { $in: ['CITIZEN', 'OFFICER'] }
+        }).select('_id');
+      }
+
+      if (nearbyUsers.length === 0) {
+        console.log(`[handleNewAlert] No nearby users found for alert: ${alertData._id}`);
+        return { notified: 0, awarenessAttached: 0 };
+      }
+
+      // 2. Find relevant awareness content based on alert type
+      //    Map EMERGENCY / WARNING categories to awareness triggers
+      const triggerMap = {
+        fire: 'fire',
+        EMERGENCY: 'fire',
+        poaching: 'poaching',
+        'illegal-logging': 'illegal-logging',
+        weather: 'weather'
+      };
+      const trigger = triggerMap[alertData.type] || 'general';
+
+      const relevantAwareness = await AwarenessContent.find({
+        triggers: trigger,
+        isActive: true
+      }).select('_id title content category').limit(5);
+
+      // 3. Build notification documents — one per nearby user
+      const notifications = nearbyUsers.map(user => ({
+        userId: user._id,
+        title: `🚨 Geo Alert: ${alertData.title}`,
+        message: `A new ${(alertData.type || 'safety').toLowerCase()} alert has been issued near your location. Please check safety guidelines.`,
+        type: 'geo-alert',
+        priority: 'HIGH',
+        metadata: {
+          alertId: alertData._id,
+          alertType: alertData.type,
+          awarenessIds: relevantAwareness.map(a => a._id),
+          autoGenerated: true
+        }
+      }));
+
+      // 4. Bulk insert for efficiency
+      await Notification.insertMany(notifications);
+
+      console.log(
+        `[handleNewAlert] Sent ${notifications.length} geo-alert notifications` +
+        ` (${relevantAwareness.length} awareness items attached)`
+      );
+
+      return {
+        notified: notifications.length,
+        awarenessAttached: relevantAwareness.length
+      };
+    } catch (error) {
+      console.error('Error in handleNewAlert:', error);
       throw error;
     }
   }
