@@ -16,6 +16,36 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
+// Express routes and middleware registered after DB connection
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/incidents', require('./routes/incidentRoutes'));
+app.use('/api/analytics', require('./routes/analyticsRoutes'));
+
+
+app.use('/api/threat-reports', require('./routes/threatReportRoutes'));
+app.use('/api/cases', require('./routes/caseRoutes'));
+app.use('/api/assignment', require('./routes/assignmentRoutes'));
+
+app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/alerts', require('./routes/alertRoutes'));
+app.use('/api/awareness', require('./routes/awarenessRoutes'));
+app.use('/api/ranger', require('./routes/rangerRoutes'));
+
+// Resource & Staff management routes (centralized under routes/resourceStaff)
+app.use('/api/staff', require('./routes/resourceStaff/staffRoutes'));
+app.use('/api/resources', require('./routes/resourceStaff/resourceRoutes'));
+
+// Basic Route
+app.get('/', (req, res) => {
+    res.send('WildSafe API is running...');
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Unhandled route error:', err.stack || err);
+    res.status(500).json({ message: 'Something went wrong!', error: err.message });
+});
+
 // Start server only after successful DB connection
 const startServer = async () => {
     try {

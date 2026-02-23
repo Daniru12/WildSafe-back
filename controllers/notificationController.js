@@ -229,109 +229,10 @@ exports.notifyByRole = async (roles, {
 };
 
 // -------------------------------------------------
-// Alert & admin management endpoints (single backend)
+// Admin management endpoints
 // -------------------------------------------------
 
-// OFFICER/ADMIN: send emergency alert to all officers/admins (URGENT)
-exports.sendEmergencyAlert = async (req, res) => {
-  try {
-    const { title, message, metadata } = req.body;
-
-    if (!title || !message) {
-      return res.status(400).json({ message: 'Title and message are required' });
-    }
-
-    const count = await exports.notifyByRole(['OFFICER', 'ADMIN'], {
-      title,
-      message,
-      type: 'ALERT',
-      priority: 'URGENT',
-      metadata: {
-        ...(metadata || {}),
-        category: 'EMERGENCY'
-      }
-    });
-
-    res.status(201).json({
-      message: `Emergency alert sent to ${count} users`,
-      recipientsCount: count
-    });
-  } catch (error) {
-    console.error('Error sending emergency alert:', error);
-    res.status(500).json({ message: 'Error sending emergency alert', error: error.message });
-  }
-};
-
-// OFFICER/ADMIN: send custom alert to specific users
-exports.sendCustomAlert = async (req, res) => {
-  try {
-    const { userIds, title, message, type, priority, metadata } = req.body;
-
-    if (!Array.isArray(userIds) || userIds.length === 0) {
-      return res.status(400).json({ message: 'userIds (non-empty array) is required' });
-    }
-
-    if (!title || !message) {
-      return res.status(400).json({ message: 'Title and message are required' });
-    }
-
-    const notifications = userIds.map(userId => ({
-      userId,
-      title,
-      message,
-      type: type || 'SYSTEM',
-      priority: priority || 'MEDIUM',
-      metadata: metadata || null
-    }));
-
-    const created = await Notification.insertMany(notifications);
-
-    res.status(201).json({
-      message: `Alert sent to ${created.length} users`,
-      recipientsCount: created.length
-    });
-  } catch (error) {
-    console.error('Error sending custom alert:', error);
-    res.status(500).json({ message: 'Error sending custom alert', error: error.message });
-  }
-};
-
-// ADMIN: send system-wide / awareness announcement
-exports.sendAnnouncement = async (req, res) => {
-  try {
-    const { title, message, targetRoles, metadata } = req.body;
-
-    if (!title || !message) {
-      return res.status(400).json({ message: 'Title and message are required' });
-    }
-
-    const roles = Array.isArray(targetRoles) && targetRoles.length > 0
-      ? targetRoles
-      : ['CITIZEN', 'OFFICER', 'ADMIN'];
-
-    const count = await exports.notifyByRole(roles, {
-      title,
-      message,
-      type: 'SYSTEM',
-      priority: 'LOW',
-      metadata: {
-        ...(metadata || {}),
-        isAnnouncement: true,
-        category: metadata?.category || 'AWARENESS'
-      }
-    });
-
-    res.status(201).json({
-      message: `Announcement sent to ${count} users`,
-      recipientsCount: count
-    });
-  } catch (error) {
-    console.error('Error sending announcement:', error);
-    res.status(500).json({ message: 'Error sending announcement', error: error.message });
-  }
-};
-
-// ADMIN: get all notifications (for moderation/monitoring)
+// ADMIN: get all notifications (for monitoring)
 exports.getAllNotificationsAdmin = async (req, res) => {
   try {
     const { type, priority, userId, limit = 50, page = 1 } = req.query;
@@ -368,7 +269,7 @@ exports.getAllNotificationsAdmin = async (req, res) => {
   }
 };
 
-// ADMIN: delete any notification (e.g., inappropriate alert)
+// ADMIN: delete any notification
 exports.adminDeleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
