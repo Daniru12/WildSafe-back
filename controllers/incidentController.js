@@ -7,6 +7,23 @@ exports.createIncident = async (req, res) => {
     try {
         const { title, description, category, location } = req.body;
         
+        // Parse location if it's a string
+        let parsedLocation;
+        if (typeof location === 'string') {
+            try {
+                parsedLocation = JSON.parse(location);
+            } catch (parseError) {
+                return res.status(400).json({ message: 'Invalid location format' });
+            }
+        } else {
+            parsedLocation = location;
+        }
+        
+        // Validate required location fields
+        if (!parsedLocation || typeof parsedLocation.lat !== 'number' || typeof parsedLocation.lng !== 'number') {
+            return res.status(400).json({ message: 'Valid location coordinates are required' });
+        }
+        
         // Get uploaded image URLs from req.files (if any)
         let photos = [];
         if (req.files && req.files.length > 0) {
@@ -17,13 +34,14 @@ exports.createIncident = async (req, res) => {
             title,
             description,
             category,
-            location,
+            location: parsedLocation,
             photos,
             reporterId: req.user.id
         });
 
         res.status(201).json(incident);
     } catch (err) {
+        console.error('Error creating incident:', err);
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };

@@ -19,17 +19,17 @@ mongoose.set('strictQuery', false);
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/incidents', require('./routes/incidentRoutes'));
 app.use('/api/analytics', require('./routes/analyticsRoutes'));
-
 app.use('/api/threat-reports', require('./routes/threatReportRoutes'));
 app.use('/api/cases', require('./routes/caseRoutes'));
 app.use('/api/assignment', require('./routes/assignmentRoutes'));
-
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/alerts', require('./routes/alertRoutes'));
+app.use('/api/awareness', require('./routes/awarenessRoutes'));
 app.use('/api/ranger', require('./routes/rangerRoutes'));
 
-// Resource & Staff management routes (commented out for testing)
-// app.use('/api/staff', require('./routes/resourceStaff/staffRoutes'));
-// app.use('/api/resources', require('./routes/resourceStaff/resourceRoutes'));
+// Resource & Staff management routes
+app.use('/api/staff', require('./routes/resourceStaff/staffRoutes'));
+app.use('/api/resources', require('./routes/resourceStaff/resourceRoutes'));
 
 // Basic Route
 app.get('/', (req, res) => {
