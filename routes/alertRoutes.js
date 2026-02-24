@@ -11,7 +11,6 @@ router.get('/', alertController.getAlerts);
 router.get('/mine', alertController.getAlerts);
 router.get('/all', roleMiddleware(['ADMIN']), alertController.getAllAlerts);
 router.get('/stats', alertController.getAlertStats);
-router.get('/unread-count', alertController.getUnreadCount);
 router.get('/location', alertController.getLocationBasedAlerts);
 router.put('/:id/read', alertController.markAsRead);
 router.put('/read-all', alertController.markAllAsRead);
