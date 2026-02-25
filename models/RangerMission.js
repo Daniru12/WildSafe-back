@@ -33,7 +33,7 @@ const evidenceSchema = new mongoose.Schema({
     },
     uploadedAt: { type: Date, default: Date.now },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
-}, { _id: false });
+}); // _id enabled by default so we can delete by id
 
 const resolutionSchema = new mongoose.Schema({
     actionSummary: { type: String, trim: true },
