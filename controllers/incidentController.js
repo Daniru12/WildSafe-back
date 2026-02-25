@@ -219,3 +219,38 @@ exports.assignIncident = async (req, res) => {
         res.status(500).json({ message: 'Server error', error: err.message });
     }
 };
+
+// @desc    Delete an incident
+// @route   DELETE /api/incidents/:id
+// @access  Private (Admin only)
+exports.deleteIncident = async (req, res) => {
+    try {
+        const incident = await Incident.findById(req.params.id);
+
+        if (!incident) {
+            return res.status(404).json({ message: 'Incident not found' });
+        }
+
+        // Only admins can delete incidents
+        if (req.user.role !== 'ADMIN') {
+            return res.status(403).json({ message: 'Access denied. Only admins can delete incidents.' });
+        }
+
+        await Incident.findByIdAndDelete(req.params.id);
+
+        res.json({ message: 'Incident deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting incident:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
+module.exports = {
+    createIncident: exports.createIncident,
+    getMyIncidents: exports.getMyIncidents,
+    getIncidentById: exports.getIncidentById,
+    getAllIncidents: exports.getAllIncidents,
+    updateStatus: exports.updateStatus,
+    assignIncident: exports.assignIncident,
+    deleteIncident: exports.deleteIncident
+};
