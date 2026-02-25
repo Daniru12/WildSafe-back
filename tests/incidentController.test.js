@@ -100,7 +100,7 @@ describe('Incident Controller Tests', () => {
         .post('/api/incidents')
         .set('Authorization', `Bearer ${citizenToken}`)
         .send(incompleteData)
-        .expect(500); // Will return 500 due to MongoDB validation error
+        .expect(400); // Returns 400 due to improved validation
     });
 
     it('should return 400 with invalid category', async () => {
