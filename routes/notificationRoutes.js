@@ -47,4 +47,11 @@ router.delete(
 	notificationController.adminDeleteNotification
 );
 
+// Admin: test multi-channel notifications (for manual verification)
+router.post(
+	'/test',
+	roleMiddleware(['ADMIN']),
+	notificationController.testNotification
+);
+
 module.exports = router;

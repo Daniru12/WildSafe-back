@@ -1,31 +1,58 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const { sendNotification } = require('../services/notificationService');
+
+// @desc    Test multi-channel notifications
+// @route   POST /api/notifications/test
+// @access  Private/ADMIN
+exports.testNotification = async (req, res) => {
+  const { phone, email, fcmToken, title, message } = req.body;
+
+  try {
+    const results = await sendNotification(
+      { phone, email, fcmToken },
+      'test_alert',
+      {
+        title: title || 'Test Notification',
+        message: message || 'This is a test message from WildSafe RWA Platform.'
+      }
+    );
+
+    res.json({
+      message: 'Test notification process completed',
+      results
+    });
+  } catch (error) {
+    console.error('Test notification error:', error);
+    res.status(500).json({ message: 'Error sending test notification', error: error.message });
+  }
+};
 
 // Get all notifications for the logged-in user
 exports.getNotifications = async (req, res) => {
   try {
     const { type, priority, isRead, limit = 50, page = 1 } = req.query;
-    
+
     // Build filter
     const filter = { userId: req.user.id };
-    
+
     if (type) filter.type = type;
     if (priority) filter.priority = priority;
     if (isRead !== undefined) filter.isRead = isRead === 'true';
-    
+
     // Calculate pagination
     const skip = (page - 1) * limit;
-    
+
     // Get notifications
     const notifications = await Notification.find(filter)
       .populate('relatedIncident', 'title status category')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(skip);
-    
+
     // Get total count
     const total = await Notification.countDocuments(filter);
-    
+
     res.json({
       notifications,
       pagination: {
@@ -48,7 +75,7 @@ exports.getUnreadCount = async (req, res) => {
       userId: req.user.id,
       isRead: false
     });
-    
+
     res.json({ count });
   } catch (error) {
     console.error('Error fetching unread count:', error);
@@ -62,23 +89,23 @@ exports.getNotificationStats = async (req, res) => {
     const [unreadCount, totalCount, byType, byPriority] = await Promise.all([
       // Unread count
       Notification.countDocuments({ userId: req.user.id, isRead: false }),
-      
+
       // Total count
       Notification.countDocuments({ userId: req.user.id }),
-      
+
       // Count by type
       Notification.aggregate([
         { $match: { userId: req.user.id, isRead: false } },
         { $group: { _id: '$type', count: { $sum: 1 } } }
       ]),
-      
+
       // Count by priority
       Notification.aggregate([
         { $match: { userId: req.user.id, isRead: false } },
         { $group: { _id: '$priority', count: { $sum: 1 } } }
       ])
     ]);
-    
+
     res.json({
       unreadCount,
       totalCount,
@@ -102,19 +129,19 @@ exports.getNotificationStats = async (req, res) => {
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const notification = await Notification.findOne({
       _id: id,
       userId: req.user.id
     });
-    
+
     if (!notification) {
       return res.status(404).json({ message: 'Notification not found' });
     }
-    
+
     notification.isRead = true;
     await notification.save();
-    
+
     res.json({ message: 'Notification marked as read', notification });
   } catch (error) {
     console.error('Error marking notification as read:', error);
@@ -129,10 +156,10 @@ exports.markAllAsRead = async (req, res) => {
       { userId: req.user.id, isRead: false },
       { isRead: true }
     );
-    
-    res.json({ 
-      message: 'All notifications marked as read', 
-      modifiedCount: result.modifiedCount 
+
+    res.json({
+      message: 'All notifications marked as read',
+      modifiedCount: result.modifiedCount
     });
   } catch (error) {
     console.error('Error marking all notifications as read:', error);
@@ -144,16 +171,16 @@ exports.markAllAsRead = async (req, res) => {
 exports.deleteNotification = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     const notification = await Notification.findOneAndDelete({
       _id: id,
       userId: req.user.id
     });
-    
+
     if (!notification) {
       return res.status(404).json({ message: 'Notification not found' });
     }
-    
+
     res.json({ message: 'Notification deleted successfully' });
   } catch (error) {
     console.error('Error deleting notification:', error);
