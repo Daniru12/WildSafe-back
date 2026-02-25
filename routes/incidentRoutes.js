@@ -6,7 +6,8 @@ const {
     getIncidentById,
     getAllIncidents,
     updateStatus,
-    assignIncident
+    assignIncident,
+    deleteIncident
 } = require('../controllers/incidentController');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
 const { uploadMultiple } = require('../middleware/upload');
@@ -19,5 +20,6 @@ router.get('/all', roleMiddleware(['OFFICER', 'ADMIN']), getAllIncidents);
 router.get('/:id', getIncidentById);
 router.patch('/:id/status', roleMiddleware(['OFFICER', 'ADMIN']), updateStatus);
 router.patch('/:id/assign', roleMiddleware(['ADMIN']), assignIncident);
+router.delete('/:id', roleMiddleware(['ADMIN']), deleteIncident);
 
 module.exports = router;

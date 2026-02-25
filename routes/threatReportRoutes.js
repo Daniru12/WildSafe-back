@@ -262,4 +262,30 @@ router.get('/stats/overview', authMiddleware, roleMiddleware(['OFFICER', 'ADMIN'
     }
 });
 
+// DELETE /api/threat-reports/:reportId - Delete threat report (admin only)
+router.delete('/:reportId', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
+    try {
+        const report = await ThreatReport.findOne({ reportId: req.params.reportId });
+        
+        if (!report) {
+            return res.status(404).json({ message: 'Threat report not found' });
+        }
+
+        // Check if there are any cases associated with this threat report
+        const associatedCase = await Case.findOne({ threatReportId: report._id });
+        if (associatedCase) {
+            return res.status(400).json({ 
+                message: 'Cannot delete threat report. It is associated with an active case.' 
+            });
+        }
+
+        await ThreatReport.findOneAndDelete({ reportId: req.params.reportId });
+
+        res.json({ message: 'Threat report deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting threat report:', error);
+        res.status(500).json({ message: 'Error deleting threat report', error: error.message });
+    }
+});
+
 module.exports = router;
