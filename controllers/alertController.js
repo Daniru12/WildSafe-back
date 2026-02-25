@@ -52,25 +52,7 @@ exports.getAlerts = async (req, res) => {
   }
 };
 
-// Get alert count for the logged-in user
-exports.getUnreadCount = async (req, res) => {
-  try {
-    const count = await Alert.countDocuments({
-      targetRoles: req.user.role,
-      isActive: true,
-      $or: [
-        { expiresAt: { $exists: false } },
-        { expiresAt: null },
-        { expiresAt: { $gt: new Date() } }
-      ]
-    });
 
-    res.json({ count });
-  } catch (error) {
-    console.error('Error fetching alert count:', error);
-    res.status(500).json({ message: 'Error fetching alert count', error: error.message });
-  }
-};
 
 // Get alert statistics
 exports.getAlertStats = async (req, res) => {

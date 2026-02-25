@@ -32,11 +32,24 @@ const userSchema = new mongoose.Schema({
         enum: ['ACTIVE', 'INACTIVE', 'SUSPENDED'],
         default: 'ACTIVE'
     },
+    // Optional geo-location for location-based smart alerts
+    location: {
+        type: {
+            type: String,
+            enum: ['Point']
+        },
+        coordinates: {
+            type: [Number] // [longitude, latitude]
+        }
+    },
     createdAt: {
         type: Date,
         default: Date.now
     }
 });
+
+// 2dsphere index for geo queries (location-based alerts)
+userSchema.index({ location: '2dsphere' });
 
 // Hash password before saving
 userSchema.pre('save', async function () {
