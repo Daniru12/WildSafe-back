@@ -1,16 +1,29 @@
 const mongoose = require('mongoose');
 
+let connected = false;
+
 beforeAll(async () => {
-  // Use test database or in-memory database
-  const mongoUri = process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/wildsafe_test';
-  await mongoose.connect(mongoUri);
+  // Skip DB connection for pure unit tests (models are jest.mock-ed)
+  if (process.env.SKIP_DB === 'true') return;
+
+  try {
+    const mongoUri = process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/wildsafe_test';
+    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 3000 });
+    connected = true;
+  } catch (err) {
+    console.warn('⚠  MongoDB not reachable – skipping DB setup (unit-test mode)');
+  }
 });
 
 afterAll(async () => {
-  await mongoose.disconnect();
+  if (connected) {
+    await mongoose.disconnect();
+  }
 });
 
 afterEach(async () => {
+  if (!connected) return;
+
   // Only clean up incident-related collections to preserve test users
   const collections = mongoose.connection.collections;
   const collectionsToClean = ['incidents', 'threatreports', 'cases', 'assignments', 'notifications', 'resources', 'staff'];
