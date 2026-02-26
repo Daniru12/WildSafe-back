@@ -106,6 +106,19 @@ exports.updateRole = async (req, res) => {
     }
 };
 
+// @desc    Get all users
+// @route   GET /api/auth/users
+// @access  Private/ADMIN
+exports.getAllUsers = async (req, res) => {
+    try {
+        const users = await User.find({}).select('-password');
+        res.json(users);
+    } catch (err) {
+        console.error('GetAllUsers error:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
 // @desc    Get user profile
 // @route   GET /api/auth/profile
 // @access  Private

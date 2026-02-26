@@ -22,6 +22,7 @@ app.use('/api/analytics', require('./routes/analyticsRoutes'));
 app.use('/api/threat-reports', require('./routes/threatReportRoutes'));
 app.use('/api/cases', require('./routes/caseRoutes'));
 app.use('/api/assignment', require('./routes/assignmentRoutes'));
+app.use('/api/ai', require('./routes/aiRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/alerts', require('./routes/alertRoutes'));
 app.use('/api/awareness', require('./routes/awarenessRoutes'));
