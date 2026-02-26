@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/Daniru12/WildSafe-back#readme",
   "dependencies": {
+    "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.6",
