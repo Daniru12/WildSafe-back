@@ -79,6 +79,33 @@ exports.login = async (req, res) => {
     }
 };
 
+// @desc    Update user role
+// @route   PUT /api/auth/users/:id/role
+// @access  Private/ADMIN
+exports.updateRole = async (req, res) => {
+    const { role } = req.body;
+    const validRoles = ['CITIZEN', 'OFFICER', 'ADMIN'];
+
+    if (!role || !validRoles.includes(role)) {
+        return res.status(400).json({ message: `Role must be one of: ${validRoles.join(', ')}` });
+    }
+
+    try {
+        const user = await User.findByIdAndUpdate(
+            req.params.id,
+            { role },
+            { new: true }
+        ).select('-password');
+
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        res.json({ message: 'Role updated successfully', user });
+    } catch (err) {
+        console.error('UpdateRole error:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
 // @desc    Get user profile
 // @route   GET /api/auth/profile
 // @access  Private
