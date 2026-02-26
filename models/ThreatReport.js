@@ -31,11 +31,11 @@ const threatReportSchema = new mongoose.Schema({
         isAnonymous: { type: Boolean, default: false }
     },
     media: [{
-        type: String, // URLs to photos/videos
+        url: { type: String, required: true }, // URL or blob URL
         mediaType: {
             type: String,
             enum: ['IMAGE', 'VIDEO'],
-            required: true
+            default: 'IMAGE'
         },
         uploadedAt: {
             type: Date,
@@ -66,8 +66,10 @@ const threatReportSchema = new mongoose.Schema({
 });
 
 threatReportSchema.pre('save', function(next) {
-    this.updatedAt = Date.now();
-    next();
+    this.updatedAt = new Date();
+    if (typeof next === 'function') {
+        next();
+    }
 });
 
 module.exports = mongoose.model('ThreatReport', threatReportSchema);

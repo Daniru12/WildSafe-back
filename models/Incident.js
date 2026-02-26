@@ -121,14 +121,17 @@ const incidentSchema = new mongoose.Schema({
     }
 });
 
-// Middleware to update updatedAt timestamp
+// Middleware to update updatedAt timestamp and handle status history
 incidentSchema.pre('save', function (next) {
+    // Ensure next is a function before calling
+    if (typeof next !== 'function') {
+        return;
+    }
+    
+    // Update timestamp
     this.updatedAt = Date.now();
-    next();
-});
-
-// Middleware to automatically add status to history when status changes
-incidentSchema.pre('save', function (next) {
+    
+    // Handle status history
     if (this.isModified('status') && !this.isNew) {
         // If statusHistory doesn't exist or is empty, initialize it
         if (!this.statusHistory || this.statusHistory.length === 0) {
