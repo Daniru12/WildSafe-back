@@ -101,7 +101,7 @@ const caseSchema = new mongoose.Schema({
 
 caseSchema.pre('save', function(next) {
     this.updatedAt = Date.now();
-    next();
+    if (typeof next === 'function') next();
 });
 
 module.exports = mongoose.model('Case', caseSchema);

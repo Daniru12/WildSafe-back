@@ -85,7 +85,7 @@ rangerMissionSchema.index({ caseId: 1 }, { unique: true });
 
 rangerMissionSchema.pre('save', function (next) {
     this.updatedAt = Date.now();
-    next();
+    if (typeof next === 'function') next();
 });
 
 // Push to rangerStatusHistory when rangerStatus changes (existing docs only; create sets initial entry)
@@ -100,7 +100,7 @@ rangerMissionSchema.pre('save', function (next) {
             changedBy: this.assignedTo
         });
     }
-    next();
+    if (typeof next === 'function') next();
 });
 
 module.exports = mongoose.model('RangerMission', rangerMissionSchema);
