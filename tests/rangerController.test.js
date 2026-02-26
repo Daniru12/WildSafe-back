@@ -1,5 +1,8 @@
+
+// Dummy API keys so app loads without real OpenAI/Cohere (analytics routes load these)
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'sk-test-dummy';
 process.env.COHERE_API_KEY = process.env.COHERE_API_KEY || 'test-cohere-dummy';
+
 const request = require('supertest');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
@@ -9,6 +12,7 @@ const Case = require('../models/Case');
 const ThreatReport = require('../models/ThreatReport');
 const RangerMission = require('../models/RangerMission');
 
+// --- Helpers: generate unique IDs for test data ---
 const generateCaseId = () => {
   const t = Date.now().toString(36);
   const r = Math.random().toString(36).substr(2, 5);
@@ -21,7 +25,11 @@ const generateReportId = () => {
   return `TR-${t}-${r}`.toUpperCase();
 };
 
-/** Create Case + ThreatReport assigned to officer; optionally create RangerMission in given status. Uses insertMany to avoid Case pre('save') next() issues in tests. */
+/**
+ * Creates a Case + ThreatReport assigned to the given officer.
+ * Optionally creates a RangerMission in the given rangerStatus (e.g. 'ASSIGNED', 'ON_SITE').
+ * Uses insertMany to avoid Case pre('save') issues in tests. Returns the caseId.
+ */
 async function createCaseForOfficer(officerId, rangerStatus = null) {
   const [report] = await ThreatReport.insertMany([{
     reportId: generateReportId(),
@@ -53,10 +61,12 @@ async function createCaseForOfficer(officerId, rangerStatus = null) {
   return caseId;
 }
 
+// ========== Test suite: Ranger API ==========
 describe('Ranger API Tests', () => {
   let officerToken, citizenToken, adminToken;
   let officerUser, citizenUser;
 
+  // Connect to MongoDB and create test users (OFFICER, CITIZEN, ADMIN) with JWT tokens
   beforeAll(async () => {
     jest.setTimeout(20000);
     if (mongoose.connection.readyState !== 1) {
@@ -100,6 +110,7 @@ describe('Ranger API Tests', () => {
     adminToken = jwt.sign({ id: adminUser._id.toString() }, process.env.JWT_SECRET || 'test_secret');
   });
 
+  // ---------- GET /api/ranger (ranger dashboard / health) ----------
   describe('GET /api/ranger', () => {
     it('should return 401 without token', async () => {
       await request(app).get('/api/ranger').expect(401);
@@ -123,6 +134,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- GET /api/ranger/cases (list assigned cases with pagination) ----------
   describe('GET /api/ranger/cases', () => {
     it('should return 401 without token', async () => {
       await request(app).get('/api/ranger/cases').expect(401);
@@ -141,6 +153,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- GET /api/ranger/cases/:caseId (single case detail for ranger) ----------
   describe('GET /api/ranger/cases/:caseId', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
@@ -184,6 +197,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/accept (officer accepts mission) ----------
   describe('POST /api/ranger/cases/:caseId/accept', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
@@ -217,6 +231,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/start-mission (set status EN_ROUTE) ----------
   describe('POST /api/ranger/cases/:caseId/start-mission', () => {
     it('should return 200 and set EN_ROUTE', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ACCEPTED');
@@ -228,6 +243,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/arrive-on-site (set status ON_SITE) ----------
   describe('POST /api/ranger/cases/:caseId/arrive-on-site', () => {
     it('should return 200 and set ON_SITE', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ACCEPTED');
@@ -244,6 +260,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/action-taken (set status ACTION_TAKEN) ----------
   describe('POST /api/ranger/cases/:caseId/action-taken', () => {
     it('should return 200 and set ACTION_TAKEN', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ACCEPTED');
@@ -263,6 +280,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/evidence (add evidence to mission) ----------
   describe('POST /api/ranger/cases/:caseId/evidence', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ON_SITE');
@@ -285,6 +303,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- DELETE /api/ranger/cases/:caseId/evidence/:evidenceId (remove one evidence) ----------
   describe('DELETE /api/ranger/cases/:caseId/evidence/:evidenceId', () => {
     it('should return 400 for invalid evidence id', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ON_SITE');
@@ -322,6 +341,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/close (close case, set RESOLVED, write resolution) ----------
   describe('POST /api/ranger/cases/:caseId/close', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ON_SITE');
@@ -376,6 +396,7 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- POST /api/ranger/cases/:caseId/decline (decline mission, unassign case) ----------
   describe('POST /api/ranger/cases/:caseId/decline', () => {
     it('should decline and unassign case', async () => {
       const declineCaseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
