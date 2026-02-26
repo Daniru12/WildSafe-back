@@ -14,9 +14,6 @@ router.use(authMiddleware);
 // Get all notifications for logged-in user
 router.get('/', notificationController.getNotifications);
 
-// Get unread notification count
-router.get('/unread-count', notificationController.getUnreadCount);
-
 // Get notification statistics (for current user)
 router.get('/stats', notificationController.getNotificationStats);
 

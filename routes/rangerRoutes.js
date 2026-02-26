@@ -46,6 +46,9 @@ router.post(
     rangerController.addEvidence
 );
 
+// Delete one evidence item by id (ranger can remove uploaded evidence when ON_SITE or ACTION_TAKEN)
+router.delete('/cases/:caseId/evidence/:evidenceId', rangerController.deleteEvidence);
+
 // Close case with solution and proof; syncs to Case . Body: actionTaken, solutionProvided, proofUrls[], dateTime?
 router.post('/cases/:caseId/close', rangerController.closeCase);
 

@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Case = require('../models/Case');
 const ThreatReport = require('../models/ThreatReport');
 const RangerMission = require('../models/RangerMission');
@@ -442,6 +443,55 @@ const addEvidence = async (req, res) => {
     }
 };
 
+/**
+ * DELETE /api/ranger/cases/:caseId/evidence/:evidenceId - Delete one uploaded evidence item.
+ * Ranger must be assigned to the case; status must be ON_SITE or ACTION_TAKEN (not yet closed).
+ */
+const deleteEvidence = async (req, res) => {
+    try {
+        const { caseId, evidenceId } = req.params;
+        const userId = req.user.id;
+
+        const caseDoc = await Case.findOne({ caseId });
+        if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case not found or not assigned to you' });
+        }
+
+        const mission = await RangerMission.findOne({ caseId, assignedTo: userId });
+        if (!mission) {
+            return res.status(404).json({ message: 'Ranger mission not found' });
+        }
+        const allowed = ['ON_SITE', 'ACTION_TAKEN'];
+        if (!allowed.includes(mission.rangerStatus)) {
+            return res.status(400).json({
+                message: 'Evidence can only be deleted when status is ON_SITE or ACTION_TAKEN'
+            });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(evidenceId)) {
+            return res.status(400).json({ message: 'Invalid evidence id' });
+        }
+
+        const hasEvidence = mission.evidence.some((e) => e._id && e._id.toString() === evidenceId);
+        if (!hasEvidence) {
+            return res.status(404).json({ message: 'Evidence not found' });
+        }
+
+        await RangerMission.findOneAndUpdate(
+            { caseId, assignedTo: userId },
+            { $pull: { evidence: { _id: evidenceId } }, $set: { updatedAt: new Date() } }
+        );
+
+        const updated = await RangerMission.findOne({ caseId, assignedTo: userId })
+            .select('evidence')
+            .lean();
+        res.json({ message: 'Evidence deleted', caseId, evidence: updated.evidence });
+    } catch (error) {
+        console.error('Error deleting evidence:', error);
+        res.status(500).json({ message: 'Error deleting evidence', error: error.message });
+    }
+};
+
 // ---------- Close case ----------
 
 /**
@@ -531,5 +581,6 @@ module.exports = {
     arriveOnSite,
     actionTaken,
     addEvidence,
+    deleteEvidence,
     closeCase
 };
