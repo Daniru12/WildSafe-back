@@ -148,7 +148,15 @@ router.get('/', authMiddleware, roleMiddleware(['OFFICER', 'ADMIN']), async (req
 // GET /api/threat-reports/:reportId - Get specific threat report
 router.get('/:reportId', authMiddleware, async (req, res) => {
     try {
-        const report = await ThreatReport.findOne({ reportId: req.params.reportId });
+        let report;
+        
+        // Try to find by MongoDB _id first (if it looks like an ObjectId)
+        if (req.params.reportId.match(/^[0-9a-fA-F]{24}$/)) {
+            report = await ThreatReport.findById(req.params.reportId);
+        } else {
+            // Try to find by reportId (like TR-ABC123-XYZ45)
+            report = await ThreatReport.findOne({ reportId: req.params.reportId });
+        }
         
         if (!report) {
             return res.status(404).json({ message: 'Threat report not found' });

@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Incident = require('../models/Incident');
 const Notification = require('../models/Notification');
 const AwarenessContent = require('../models/awareness/AwarenessContent');
+const { sendBulkWhatsAppAlerts } = require('./whatsappService');
 
 class SmartAlertService {
 
@@ -356,9 +357,36 @@ class SmartAlertService {
         ` (${relevantAwareness.length} awareness items attached)`
       );
 
+      // 5. Send WhatsApp alerts via UltraMsg to nearby users who have a phone number
+      const usersWithPhone = await User.find({
+        _id: { $in: nearbyUsers.map(u => u._id) },
+        phone: { $exists: true, $ne: '' },
+        status: 'ACTIVE'
+      }).select('phone name');
+
+      if (usersWithPhone.length > 0) {
+        // Await so the result (including recipients list) flows back to the controller
+        const whatsappResult = await sendBulkWhatsAppAlerts(
+          usersWithPhone,
+          alertData.title,
+          alertData.message,
+          alertData.category
+        ).catch(err => {
+          console.error('[handleNewAlert] WhatsApp dispatch error:', err);
+          return { sent: 0, failed: 0, total: 0, recipients: [] };
+        });
+
+        return {
+          notified: notifications.length,
+          awarenessAttached: relevantAwareness.length,
+          whatsapp: whatsappResult
+        };
+      }
+
       return {
         notified: notifications.length,
-        awarenessAttached: relevantAwareness.length
+        awarenessAttached: relevantAwareness.length,
+        whatsapp: { sent: 0, failed: 0, total: 0, recipients: [] }
       };
     } catch (error) {
       console.error('Error in handleNewAlert:', error);
