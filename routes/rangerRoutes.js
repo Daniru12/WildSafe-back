@@ -16,7 +16,10 @@ router.get('/', (req, res) => {
 // My assigned cases (creates RangerMission if missing). Query: rangerStatus, page, limit
 router.get('/cases', rangerController.getMyAssignedCases);
 
-// Case detail for ranger 
+// Suggested actions for ranger (Groq AI or rule-based) – must be before /cases/:caseId
+router.get('/cases/:caseId/suggested-actions', rangerController.getSuggestedActions);
+
+// Case detail for ranger
 router.get('/cases/:caseId', rangerController.getCaseDetail);
 
 // Accept mission (only when ASSIGNED)
