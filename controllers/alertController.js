@@ -142,14 +142,20 @@ exports.markAllAsRead = async (req, res) => {
   }
 };
 
-// Send emergency alert to all officers/admins (URGENT)
+// Send emergency alert (URGENT)
 exports.sendEmergencyAlert = async (req, res) => {
   try {
-    const { title, message, location, expiresAt } = req.body;
+    const { title, message, location, expiresAt, targetRoles } = req.body;
 
     if (!title || !message) {
       return res.status(400).json({ message: 'Title and message are required' });
     }
+
+    // Use provided targetRoles or default to OFFICER + ADMIN
+    const validRoles = ['CITIZEN', 'OFFICER', 'ADMIN'];
+    const roles = Array.isArray(targetRoles) && targetRoles.every(r => validRoles.includes(r))
+      ? targetRoles
+      : ['OFFICER', 'ADMIN'];
 
     const alert = await Alert.create({
       title,
@@ -157,26 +163,33 @@ exports.sendEmergencyAlert = async (req, res) => {
       category: 'EMERGENCY',
       priority: 'URGENT',
       createdBy: req.user.id,
-      targetRoles: ['OFFICER', 'ADMIN'],
+      targetRoles: roles,
       location,
       expiresAt
     });
 
     // Count target users for response
     const targetUserCount = await User.countDocuments({
-      role: { $in: ['OFFICER', 'ADMIN'] },
+      role: { $in: roles },
       status: 'ACTIVE'
     });
 
-    // Trigger geo-alert notifications + awareness for nearby users (fire-and-forget)
-    SmartAlertService.handleNewAlert(alert).catch(err =>
-      console.error('[sendEmergencyAlert] handleNewAlert error:', err)
-    );
+    // Trigger geo-alert notifications + awareness + WhatsApp for nearby users
+    const alertResult = await SmartAlertService.handleNewAlert(alert).catch(err => {
+      console.error('[sendEmergencyAlert] handleNewAlert error:', err);
+      return { notified: 0, awarenessAttached: 0, whatsapp: { sent: 0, failed: 0, total: 0, recipients: [] } };
+    });
 
     res.status(201).json({
       message: `Emergency alert sent to ${targetUserCount} users`,
       alert,
-      recipientsCount: targetUserCount
+      recipientsCount: targetUserCount,
+      whatsappDelivery: {
+        sent: alertResult.whatsapp?.sent ?? 0,
+        failed: alertResult.whatsapp?.failed ?? 0,
+        total: alertResult.whatsapp?.total ?? 0,
+        recipients: alertResult.whatsapp?.recipients ?? []
+      }
     });
   } catch (error) {
     console.error('Error sending emergency alert:', error);
@@ -231,15 +244,22 @@ exports.sendCustomAlert = async (req, res) => {
       status: 'ACTIVE'
     });
 
-    // Trigger geo-alert notifications + awareness for nearby users (fire-and-forget)
-    SmartAlertService.handleNewAlert(alert).catch(err =>
-      console.error('[sendCustomAlert] handleNewAlert error:', err)
-    );
+    // Trigger geo-alert notifications + awareness + WhatsApp for nearby users
+    const alertResult = await SmartAlertService.handleNewAlert(alert).catch(err => {
+      console.error('[sendCustomAlert] handleNewAlert error:', err);
+      return { notified: 0, awarenessAttached: 0, whatsapp: { sent: 0, failed: 0, total: 0, recipients: [] } };
+    });
 
     res.status(201).json({
       message: `Alert sent to ${targetUserCount} users`,
       alert,
-      recipientsCount: targetUserCount
+      recipientsCount: targetUserCount,
+      whatsappDelivery: {
+        sent: alertResult.whatsapp?.sent ?? 0,
+        failed: alertResult.whatsapp?.failed ?? 0,
+        total: alertResult.whatsapp?.total ?? 0,
+        recipients: alertResult.whatsapp?.recipients ?? []
+      }
     });
   } catch (error) {
     console.error('Error sending custom alert:', error);
