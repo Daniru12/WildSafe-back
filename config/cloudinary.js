@@ -6,7 +6,8 @@ if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !pr
     console.warn('Cloudinary credentials not found. Image upload will be disabled.');
     module.exports = {
         cloudinary: null,
-        storage: null
+        storage: null,
+        rangerStorage: null
     };
 } else {
     // Configure Cloudinary
@@ -16,19 +17,31 @@ if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !pr
       api_secret: process.env.CLOUDINARY_API_SECRET
     });
 
-    // Configure storage for multer
+    // Storage for incident uploads
     const storage = new CloudinaryStorage({
       cloudinary: cloudinary,
       params: {
-        folder: 'wildsafe-incidents', // Folder name in Cloudinary
+        folder: 'wildsafe-incidents',
         allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
         public_id: (req, file) => `incident-${Date.now()}-${file.originalname}`,
         resource_type: 'auto'
       }
     });
 
+    // Storage for ranger evidence uploads (photos/videos)
+    const rangerStorage = new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: 'wildsafe-ranger',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm'],
+        public_id: (req, file) => `ranger-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        resource_type: 'auto'
+      }
+    });
+
     module.exports = {
       cloudinary,
-      storage
+      storage,
+      rangerStorage
     };
 }
