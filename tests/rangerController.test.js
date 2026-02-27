@@ -197,6 +197,62 @@ describe('Ranger API Tests', () => {
     });
   });
 
+  // ---------- GET /api/ranger/cases/:caseId/suggested-actions (AI or fallback steps) ----------
+  describe('GET /api/ranger/cases/:caseId/suggested-actions', () => {
+    it('should return 401 without token', async () => {
+      const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
+      await request(app)
+        .get(`/api/ranger/cases/${caseId}/suggested-actions`)
+        .expect(401);
+    });
+
+    it('should return 403 when case not assigned to officer', async () => {
+      const [report] = await ThreatReport.insertMany([{
+        reportId: generateReportId(),
+        threatType: 'OTHER',
+        location: { lat: 1, lng: 2, address: 'Other' },
+        dateTime: new Date(),
+        description: 'Other',
+        reporterInfo: { name: 'R' }
+      }]);
+      const otherCaseId = generateCaseId();
+      await Case.insertMany([{
+        caseId: otherCaseId,
+        threatReportId: report._id,
+        threatType: 'OTHER',
+        location: { lat: 1, lng: 2, address: 'Other' },
+        dateTime: new Date(),
+        assignedOfficer: citizenUser._id
+      }]);
+      await request(app)
+        .get(`/api/ranger/cases/${otherCaseId}/suggested-actions`)
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(403);
+    });
+
+    it('should return 404 for non-existent case', async () => {
+      await request(app)
+        .get('/api/ranger/cases/CS-NONE-XXXXX/suggested-actions')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(404);
+    });
+
+    it('should return 200 with suggestedActions array when assigned', async () => {
+      const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
+      const res = await request(app)
+        .get(`/api/ranger/cases/${caseId}/suggested-actions`)
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+      expect(res.body.caseId).toBe(caseId);
+      expect(Array.isArray(res.body.suggestedActions)).toBe(true);
+      expect(res.body.suggestedActions.length).toBeGreaterThan(0);
+      res.body.suggestedActions.forEach((step) => {
+        expect(typeof step).toBe('string');
+        expect(step.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
   // ---------- POST /api/ranger/cases/:caseId/accept (officer accepts mission) ----------
   describe('POST /api/ranger/cases/:caseId/accept', () => {
     it('should return 401 without token', async () => {
