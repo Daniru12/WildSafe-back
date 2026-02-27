@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Case = require('../models/Case');
 const ThreatReport = require('../models/ThreatReport');
 const RangerMission = require('../models/RangerMission');
+const { getSuggestedRangerSteps } = require('./suggestRangerStepsController');
 
 /**
  * GET /api/ranger/cases - My assigned cases (create RangerMission if missing)
@@ -332,6 +333,37 @@ const arriveOnSite = async (req, res) => {
     }
 };
 
+// ---------- Suggested actions (Groq AI or rule-based fallback) ----------
+
+/**
+ * GET /api/ranger/cases/:caseId/suggested-actions - Suggested steps for ranger (uses suggestRangerSteps + groq)
+ */
+const getSuggestedActions = async (req, res) => {
+    try {
+        const { caseId } = req.params;
+        const userId = req.user.id;
+
+        const caseDoc = await Case.findOne({ caseId }).populate('threatReportId').lean();
+        if (!caseDoc) {
+            return res.status(404).json({ message: 'Case not found' });
+        }
+        if (caseDoc.assignedOfficer?.toString() !== userId) {
+            return res.status(403).json({ message: 'Case is not assigned to you' });
+        }
+
+        const threatType = caseDoc.threatType || 'OTHER';
+        const description = (caseDoc.threatReportId && caseDoc.threatReportId.description)
+            ? String(caseDoc.threatReportId.description)
+            : '';
+
+        const suggestedActions = await getSuggestedRangerSteps(threatType, description);
+        res.json({ caseId, suggestedActions });
+    } catch (error) {
+        console.error('Error fetching suggested actions:', error);
+        res.status(500).json({ message: 'Error fetching suggested actions', error: error.message });
+    }
+};
+
 /**
  * POST /api/ranger/cases/:caseId/action-taken - Set ACTION_TAKEN (from ON_SITE)
  */
@@ -577,6 +609,7 @@ module.exports = {
     acceptMission,
     declineMission,
     getCaseDetail,
+    getSuggestedActions,
     startMission,
     arriveOnSite,
     actionTaken,

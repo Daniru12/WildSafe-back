@@ -79,6 +79,86 @@ router.get('/:caseId', authMiddleware, async (req, res) => {
     }
 });
 
+// POST /api/cases - Create new case (admin only)
+router.post('/', authMiddleware, async (req, res) => {
+    try {
+        const {
+            threatReportId,
+            threatType,
+            location,
+            reporterInfo,
+            dateTime,
+            priority,
+            assignedOfficer
+        } = req.body;
+
+        // Validate admin role
+        if (req.user.role !== 'ADMIN') {
+            return res.status(403).json({ message: 'Only admins can create cases' });
+        }
+
+        // Validate required fields
+        if (!threatReportId || !threatType || !location || !dateTime) {
+            return res.status(400).json({ 
+                message: 'Missing required fields: threatReportId, threatType, location, dateTime' 
+            });
+        }
+
+        // Validate threat report exists
+        const threatReport = await ThreatReport.findById(threatReportId);
+        if (!threatReport) {
+            return res.status(404).json({ message: 'Threat report not found' });
+        }
+
+        // Validate assigned officer if provided
+        if (assignedOfficer) {
+            const officer = await User.findById(assignedOfficer);
+            if (!officer || !['OFFICER', 'ADMIN'].includes(officer.role)) {
+                return res.status(400).json({ message: 'Invalid officer assignment' });
+            }
+        }
+
+        // Create new case
+        const newCase = new Case({
+            caseId: generateCaseId(),
+            threatReportId,
+            threatType,
+            location,
+            reporterInfo: reporterInfo || {},
+            dateTime: new Date(dateTime),
+            priority: priority || 'MEDIUM',
+            assignedOfficer: assignedOfficer || null,
+            status: assignedOfficer ? 'IN_PROGRESS' : 'NEW'
+        });
+
+        await newCase.save();
+
+        // Add notification if officer is assigned
+        if (assignedOfficer) {
+            newCase.notifications.push({
+                recipient: assignedOfficer,
+                type: 'CASE_ASSIGNED',
+                message: `Case ${newCase.caseId} has been assigned to you`,
+                sentAt: new Date()
+            });
+            await newCase.save();
+        }
+
+        // Populate response data
+        const populatedCase = await Case.findById(newCase._id)
+            .populate('assignedOfficer', 'name email')
+            .populate('threatReportId', 'reportId');
+
+        res.status(201).json({
+            message: 'Case created successfully',
+            case: populatedCase
+        });
+    } catch (error) {
+        console.error('Error creating case:', error);
+        res.status(500).json({ message: 'Error creating case', error: error.message });
+    }
+});
+
 // PUT /api/cases/:caseId/assign - Assign case to officer/team
 router.put('/:caseId/assign', authMiddleware, async (req, res) => {
     try {

@@ -10,6 +10,11 @@ const staffSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
+    status: {
+        type: String,
+        enum: ['AVAILABLE', 'UNAVAILABLE', 'ASSIGNED'],
+        default: 'AVAILABLE'
+    },
     permissions: {
         type: [String],
         default: []
