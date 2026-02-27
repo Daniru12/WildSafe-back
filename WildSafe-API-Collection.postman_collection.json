@@ -1,0 +1,1383 @@
+{
+  "info": {
+    "name": "WildSafe API",
+    "description": "Complete API collection for WildSafe wildlife protection system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"CITIZEN\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/register",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.environment.set('AUTH_TOKEN', jsonData.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"citizen@test.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/login",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/profile",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/users",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "users"]
+            }
+          }
+        },
+        {
+          "name": "Update User Role (Admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"OFFICER\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/users/:userId/role",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "users", ":userId", "role"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Incidents",
+      "item": [
+        {
+          "name": "Create Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Poaching Activity Detected\",\n  \"description\": \"Suspicious activity near the forest reserve\",\n  \"category\": \"POACHING\",\n  \"location\": {\n    \"lat\": 12.3456,\n    \"lng\": 78.9012,\n    \"address\": \"Forest Reserve Area\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents"]
+            }
+          }
+        },
+        {
+          "name": "Get My Incidents",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents/mine",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents", "mine"]
+            }
+          }
+        },
+        {
+          "name": "Get All Incidents (Officer/Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents/all?status=SUBMITTED&category=POACHING",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents", "all"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "SUBMITTED"
+                },
+                {
+                  "key": "category",
+                  "value": "POACHING"
+                },
+                {
+                  "key": "priority",
+                  "value": "HIGH",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Incident by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Update Incident Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_PROGRESS\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents/:id/status",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents", ":id", "status"]
+            }
+          }
+        },
+        {
+          "name": "Assign Incident to Officer",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignedTo\": \"{{OFFICER_ID}}\",\n  \"priority\": \"HIGH\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents/:id/assign",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents", ":id", "assign"]
+            }
+          }
+        },
+        {
+          "name": "Delete Incident (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/incidents/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "incidents", ":id"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Get My Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts"]
+            }
+          }
+        },
+        {
+          "name": "Get All Alerts (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/all",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "all"]
+            }
+          }
+        },
+        {
+          "name": "Get Alert Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/stats",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Get Location-Based Alerts",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/location?lat=12.3456&lng=78.9012&radius=10",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "location"],
+              "query": [
+                {
+                  "key": "lat",
+                  "value": "12.3456"
+                },
+                {
+                  "key": "lng",
+                  "value": "78.9012"
+                },
+                {
+                  "key": "radius",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Send Emergency Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Critical Poaching Alert\",\n  \"message\": \"Active poaching detected in Zone A\",\n  \"location\": {\n    \"lat\": 12.3456,\n    \"lng\": 78.9012\n  }\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/emergency",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "emergency"]
+            }
+          }
+        },
+        {
+          "name": "Send Custom Alert",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Custom Alert\",\n  \"message\": \"Custom alert message\",\n  \"priority\": \"HIGH\",\n  \"targets\": [\"OFFICER\", \"ADMIN\"]\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/custom",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "custom"]
+            }
+          }
+        },
+        {
+          "name": "Send Announcement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"System Announcement\",\n  \"message\": \"Important announcement for all users\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/announcement",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "announcement"]
+            }
+          }
+        },
+        {
+          "name": "Mark Alert as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/:id/read",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", ":id", "read"]
+            }
+          }
+        },
+        {
+          "name": "Mark All Alerts as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/read-all",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", "read-all"]
+            }
+          }
+        },
+        {
+          "name": "Delete Alert",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/alerts/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "alerts", ":id"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Get Incidents by Category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/analytics/incidents-by-category",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "analytics", "incidents-by-category"]
+            }
+          }
+        },
+        {
+          "name": "Get Incidents by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/analytics/incidents-by-status",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "analytics", "incidents-by-status"]
+            }
+          }
+        },
+        {
+          "name": "Get Incident Trends",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/analytics/trends",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "analytics", "trends"]
+            }
+          }
+        },
+        {
+          "name": "Get Predictive Insights",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/analytics/predictive/insights",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "analytics", "predictive", "insights"]
+            }
+          }
+        },
+        {
+          "name": "Get Incident Prediction",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/analytics/predictive/incident/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "analytics", "predictive", "incident", ":id"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get My Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications"]
+            }
+          }
+        },
+        {
+          "name": "Get Notification Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/stats",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications", "stats"]
+            }
+          }
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/:id/read",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications", ":id", "read"]
+            }
+          }
+        },
+        {
+          "name": "Mark All Notifications as Read",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/read-all",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications", "read-all"]
+            }
+          }
+        },
+        {
+          "name": "Delete Notification",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Get All Notifications (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/admin/all",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications", "admin", "all"]
+            }
+          }
+        },
+        {
+          "name": "Test Notification (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"email\",\n  \"recipient\": \"test@example.com\",\n  \"subject\": \"Test Notification\",\n  \"message\": \"This is a test notification\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/test",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "notifications", "test"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Awareness",
+      "item": [
+        {
+          "name": "Get Active Awareness Content",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness/active",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness", "active"]
+            }
+          }
+        },
+        {
+          "name": "Get Relevant Awareness by Type",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness/relevant/fire",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness", "relevant", "fire"]
+            }
+          }
+        },
+        {
+          "name": "Get Awareness by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Create Awareness Content (Officer/Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Wildlife Protection Tips\",\n  \"description\": \"Important safety measures for wildlife protection\",\n  \"content\": \"Detailed content about wildlife protection\",\n  \"category\": \"EDUCATION\",\n  \"relatedAlertType\": \"POACHING\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness"]
+            }
+          }
+        },
+        {
+          "name": "Update Awareness Content (Officer/Admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Wildlife Protection Tips\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Send Periodic Update (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contentId\": \"{{CONTENT_ID}}\",\n  \"targetAudience\": [\"CITIZEN\", \"OFFICER\"]\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness/periodic",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness", "periodic"]
+            }
+          }
+        },
+        {
+          "name": "Delete Awareness Content (Admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/awareness/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "awareness", ":id"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ranger Operations",
+      "item": [
+        {
+          "name": "Get Assigned Cases",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases?rangerStatus=ASSIGNED&page=1&limit=10",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases"],
+              "query": [
+                {
+                  "key": "rangerStatus",
+                  "value": "ASSIGNED"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Case Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId"]
+            }
+          }
+        },
+        {
+          "name": "Accept Mission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/accept",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "accept"]
+            }
+          }
+        },
+        {
+          "name": "Decline Mission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"declineReason\": \"Not available at this time\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/decline",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "decline"]
+            }
+          }
+        },
+        {
+          "name": "Start Mission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/start-mission",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "start-mission"]
+            }
+          }
+        },
+        {
+          "name": "Arrive on Site",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Arrived at the location, assessing situation\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/arrive-on-site",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "arrive-on-site"]
+            }
+          }
+        },
+        {
+          "name": "Action Taken",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/action-taken",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "action-taken"]
+            }
+          }
+        },
+        {
+          "name": "Add Evidence",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "description",
+                  "value": "Photos of the evidence",
+                  "type": "text"
+                },
+                {
+                  "key": "notes",
+                  "value": "Detailed notes about the evidence",
+                  "type": "text"
+                },
+                {
+                  "key": "conditionSummary",
+                  "value": "Good condition, well preserved",
+                  "type": "text"
+                },
+                {
+                  "key": "gpsLat",
+                  "value": "12.3456",
+                  "type": "text"
+                },
+                {
+                  "key": "gpsLng",
+                  "value": "78.9012",
+                  "type": "text"
+                },
+                {
+                  "key": "photos",
+                  "type": "file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/evidence",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "evidence"]
+            }
+          }
+        },
+        {
+          "name": "Delete Evidence",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/evidence/:evidenceId",
+              "host": ["{{BASE_URL}}"],
+              "path": [
+                "api",
+                "ranger",
+                "cases",
+                ":caseId",
+                "evidence",
+                ":evidenceId"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cases",
+      "item": [
+        {
+          "name": "Get All Cases",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/cases?status=OPEN&priority=HIGH&page=1&limit=10",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "cases"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "OPEN"
+                },
+                {
+                  "key": "priority",
+                  "value": "HIGH"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Case by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/cases/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "cases", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Create Case from Threat Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threatReportId\": \"{{THREAT_REPORT_ID}}\",\n  \"priority\": \"HIGH\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/cases",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "cases"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Threat Reports",
+      "item": [
+        {
+          "name": "Submit Threat Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threatType\": \"POACHING\",\n  \"location\": {\n    \"lat\": 12.3456,\n    \"lng\": 78.9012,\n    \"address\": \"Forest Reserve\"\n  },\n  \"dateTime\": \"2024-02-27T10:30:00Z\",\n  \"description\": \"Suspicious activity observed in the forest area\",\n  \"reporterInfo\": {\n    \"name\": \"John Doe\",\n    \"contactNumber\": \"+1234567890\",\n    \"email\": \"john@example.com\"\n  },\n  \"urgencyLevel\": \"HIGH\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/threat-reports",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "threat-reports"]
+            }
+          }
+        },
+        {
+          "name": "Get All Threat Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/threat-reports?threatType=POACHING&page=1&limit=10",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "threat-reports"],
+              "query": [
+                {
+                  "key": "threatType",
+                  "value": "POACHING"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Threat Report by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/threat-reports/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "threat-reports", ":id"]
+            }
+          }
+        },
+        {
+          "name": "Update Threat Report",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"UNDER_INVESTIGATION\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/threat-reports/:id",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "threat-reports", ":id"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "AUTH_TOKEN",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "OFFICER_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "CONTENT_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "THREAT_REPORT_ID",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
