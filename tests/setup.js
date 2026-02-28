@@ -27,7 +27,7 @@ afterEach(async () => {
 
   // Only clean up incident-related collections to preserve test users
   const collections = mongoose.connection.collections;
-  const collectionsToClean = ['incidents', 'threatreports', 'cases', 'rangermissions', 'assignments', 'notifications', 'resources', 'staff'];
+  const collectionsToClean = ['incidents', 'assignments', 'notifications', 'resources', 'staff'];
   
   for (const key in collections) {
     if (collectionsToClean.includes(key.toLowerCase())) {
