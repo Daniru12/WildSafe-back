@@ -38,9 +38,15 @@ router.post('/cases/:caseId/arrive-on-site', rangerController.arriveOnSite);
 router.post('/cases/:caseId/action-taken', rangerController.actionTaken);
 
 // Upload evidence - multipart photos + body: description, notes, conditionSummary, gpsLat, gpsLng (Day 4)
+// Skip multer for JSON-only body (e.g. text evidence) so Cloudinary/multer does not throw
 router.post(
     '/cases/:caseId/evidence',
     (req, res, next) => {
+        const isMultipart = (req.headers['content-type'] || '').includes('multipart/form-data');
+        if (!isMultipart) {
+            req.files = [];
+            return next();
+        }
         rangerEvidenceUpload(req, res, (err) => {
             if (err) return res.status(400).json({ message: err.message || 'Upload failed' });
             next();

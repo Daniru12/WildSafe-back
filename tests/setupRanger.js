@@ -1,18 +1,20 @@
+/**
+ * Setup for ranger tests only. Used via Jest project so afterEach does NOT wipe
+ * cases/rangermissions/threatreports, allowing ranger tests to create data and use it.
+ */
 require('dotenv').config();
 const mongoose = require('mongoose');
 
 let connected = false;
 
 beforeAll(async () => {
-  // Skip DB connection for pure unit tests (models are jest.mock-ed)
   if (process.env.SKIP_DB === 'true') return;
-
   try {
-    const mongoUri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI || 'mongodb://mongodb+srv://SE:%23SE2026@se.nxqezs4.mongodb.net/AF?appName=SE&retryWrites=true&w=majority/wildsafe_test';
+    const mongoUri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/wildsafe_test';
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
     connected = true;
   } catch (err) {
-    console.warn('⚠  MongoDB not reachable – skipping DB setup (unit-test mode)');
+    console.warn('⚠  MongoDB not reachable – skipping DB setup');
   }
 });
 
@@ -24,11 +26,9 @@ afterAll(async () => {
 
 afterEach(async () => {
   if (!connected) return;
-
-  // Only clean up incident-related collections to preserve test users
+  // Do NOT clean cases, rangermissions, threatreports so ranger tests can create and use them in the same run.
   const collections = mongoose.connection.collections;
-  const collectionsToClean = ['incidents', 'threatreports', 'cases', 'rangermissions', 'assignments', 'notifications', 'resources', 'staff'];
-  
+  const collectionsToClean = ['incidents', 'assignments', 'notifications', 'resources', 'staff'];
   for (const key in collections) {
     if (collectionsToClean.includes(key.toLowerCase())) {
       const collection = collections[key];
