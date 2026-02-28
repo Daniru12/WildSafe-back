@@ -113,7 +113,7 @@ describe('Incident Controller Tests', () => {
         .post('/api/incidents')
         .set('Authorization', `Bearer ${citizenToken}`)
         .send(invalidData)
-        .expect(500); // Will return 500 due to MongoDB validation error
+        .expect(400); // Now returns 400 due to improved validation
     });
 
     it('should return 400 with invalid location coordinates', async () => {
@@ -129,7 +129,7 @@ describe('Incident Controller Tests', () => {
         .post('/api/incidents')
         .set('Authorization', `Bearer ${citizenToken}`)
         .send(invalidLocationData)
-        .expect(500); // Will return 500 due to MongoDB validation error
+        .expect(400); // Now returns 400 due to improved validation
     });
   });
 

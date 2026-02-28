@@ -8,6 +8,12 @@ exports.createIncident = async (req, res) => {
     try {
         const { title, description, category, location } = req.body;
         
+        // Validate category
+        const validCategories = ['POACHING', 'FOREST_FIRE', 'ILLEGAL_LOGGING', 'HUMAN_WILDLIFE_CONFLICT', 'OTHER'];
+        if (!validCategories.includes(category)) {
+            return res.status(400).json({ message: 'Invalid category. Must be one of: ' + validCategories.join(', ') });
+        }
+        
         // Parse location if it's a string
         let parsedLocation;
         if (typeof location === 'string') {
@@ -23,6 +29,11 @@ exports.createIncident = async (req, res) => {
         // Validate required location fields
         if (!parsedLocation || typeof parsedLocation.lat !== 'number' || typeof parsedLocation.lng !== 'number') {
             return res.status(400).json({ message: 'Valid location coordinates are required' });
+        }
+        
+        // Validate coordinate ranges
+        if (parsedLocation.lat < -90 || parsedLocation.lat > 90 || parsedLocation.lng < -180 || parsedLocation.lng > 180) {
+            return res.status(400).json({ message: 'Location coordinates out of valid range. Latitude must be between -90 and 90, longitude between -180 and 180' });
         }
         
         // Get uploaded image URLs from req.files (if any)
