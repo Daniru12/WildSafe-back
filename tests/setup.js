@@ -25,9 +25,9 @@ afterAll(async () => {
 afterEach(async () => {
   if (!connected) return;
 
-  // Only clean up incident-related collections to preserve test users
+  // Clean incident-related collections only (not cases/threatreports/rangermissions – ranger tests use those and run in parallel)
   const collections = mongoose.connection.collections;
-  const collectionsToClean = ['incidents', 'threatreports', 'cases', 'rangermissions', 'assignments', 'notifications', 'resources', 'staff'];
+  const collectionsToClean = ['incidents', 'assignments', 'notifications', 'resources', 'staff'];
   
   for (const key in collections) {
     if (collectionsToClean.includes(key.toLowerCase())) {
