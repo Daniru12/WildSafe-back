@@ -8,7 +8,7 @@ beforeAll(async () => {
   if (process.env.SKIP_DB === 'true') return;
 
   try {
-    const mongoUri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/wildsafe_test';
+    const mongoUri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI || 'mongodb://mongodb+srv://SE:%23SE2026@se.nxqezs4.mongodb.net/AF?appName=SE&retryWrites=true&w=majority/wildsafe_test';
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 5000 });
     connected = true;
   } catch (err) {
