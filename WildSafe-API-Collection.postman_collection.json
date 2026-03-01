@@ -976,6 +976,24 @@
           }
         },
         {
+          "name": "Get Suggested Actions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/suggested-actions",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "suggested-actions"]
+            }
+          }
+        },
+        {
           "name": "Accept Mission",
           "request": {
             "method": "POST",
@@ -1157,6 +1175,33 @@
                 "evidence",
                 ":evidenceId"
               ]
+            }
+          }
+        },
+        {
+          "name": "Close Case",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{AUTH_TOKEN}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"actionTaken\": \"Removed trap and documented site\",\n  \"solutionProvided\": \"Trap removed; area secured\",\n  \"proofUrls\": [],\n  \"dateTime\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/ranger/cases/:caseId/close",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "ranger", "cases", ":caseId", "close"]
             }
           }
         }

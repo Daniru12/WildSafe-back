@@ -118,15 +118,19 @@ Ranger mission tracking and evidence management.
 
 - `GET /api/ranger/cases` - Get assigned cases
 - `GET /api/ranger/cases/:caseId` - Get case details
+- `GET /api/ranger/cases/:caseId/suggested-actions` - Get AI/rule-based suggested actions for the case
 - `POST /api/ranger/cases/:caseId/accept` - Accept mission
 - `POST /api/ranger/cases/:caseId/decline` - Decline mission
 - `POST /api/ranger/cases/:caseId/start-mission` - Start mission (EN_ROUTE)
 - `POST /api/ranger/cases/:caseId/arrive-on-site` - Arrive on site
 - `POST /api/ranger/cases/:caseId/action-taken` - Record action taken
-- `POST /api/ranger/cases/:caseId/evidence` - Upload evidence (multipart)
+- `POST /api/ranger/cases/:caseId/evidence` - Upload evidence (multipart or JSON)
 - `DELETE /api/ranger/cases/:caseId/evidence/:evidenceId` - Delete evidence
+- `POST /api/ranger/cases/:caseId/close` - Close case (body: actionTaken, solutionProvided, proofUrls, dateTime)
 
-**Mission Status Flow:** ASSIGNED → EN_ROUTE → ON_SITE → ACTION_TAKEN → COMPLETED
+**Mission Status Flow:** ASSIGNED → ACCEPTED → EN_ROUTE → ON_SITE → ACTION_TAKEN → CLOSED
+
+**Using path variables:** Set `caseId` (and `evidenceId` for Delete Evidence) in the request Params tab, or use environment variable `{{CASE_ID}}` by replacing `:caseId` in the URL with `{{CASE_ID}}`.
 
 ### 8. **Cases**
 
