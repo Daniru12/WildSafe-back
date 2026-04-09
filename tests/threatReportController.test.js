@@ -7,6 +7,11 @@ const ThreatReport = require('../models/ThreatReport');
 const Case = require('../models/Case');
 
 describe('Threat Report Controller Tests', () => {
+  // ============================================
+  // INTEGRATION TESTS
+  // These tests verify the complete API endpoints
+  // including authentication, validation, and database operations
+  // ============================================
   let citizenToken, officerToken, adminToken;
   let citizenUser, officerUser, adminUser;
   let testThreatReport;
@@ -51,6 +56,8 @@ describe('Threat Report Controller Tests', () => {
     await Case.deleteMany({});
   });
 
+  // Integration Tests - POST /api/threat-reports
+  // Tests the threat report creation endpoint with various scenarios
   describe('POST /api/threat-reports - Integration Tests', () => {
     const threatReportData = {
       threatType: 'POACHING',
@@ -196,6 +203,8 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/threat-reports/mine
+  // Tests retrieving threat reports for the logged-in user
   describe('GET /api/threat-reports/mine - Integration Tests', () => {
     beforeEach(async () => {
       await ThreatReport.create({
@@ -278,6 +287,8 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/threat-reports
+  // Tests retrieving all threat reports with filtering capabilities
   describe('GET /api/threat-reports - Integration Tests', () => {
     beforeEach(async () => {
       await ThreatReport.create({
@@ -362,6 +373,8 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/threat-reports/:reportId
+  // Tests retrieving a specific threat report by ID
   describe('GET /api/threat-reports/:reportId - Integration Tests', () => {
     beforeEach(async () => {
       testThreatReport = await ThreatReport.create({
@@ -421,6 +434,8 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // Integration Tests - PUT /api/threat-reports/:reportId/validate
+  // Tests validating/rejecting threat reports by authorized users
   describe('PUT /api/threat-reports/:reportId/validate - Integration Tests', () => {
     beforeEach(async () => {
       testThreatReport = await ThreatReport.create({
@@ -515,6 +530,8 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/threat-reports/stats/overview
+  // Tests retrieving threat report statistics
   describe('GET /api/threat-reports/stats/overview - Integration Tests', () => {
     beforeEach(async () => {
       await ThreatReport.create({
@@ -582,6 +599,8 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // Integration Tests - DELETE /api/threat-reports/:reportId
+  // Tests deleting threat reports by authorized users
   describe('DELETE /api/threat-reports/:reportId - Integration Tests', () => {
     beforeEach(async () => {
       testThreatReport = await ThreatReport.create({
@@ -654,7 +673,13 @@ describe('Threat Report Controller Tests', () => {
     });
   });
 
+  // ============================================
+  // PERFORMANCE TESTS
+  // These tests evaluate the speed, scalability, and
+  // responsiveness of the API under various loads
+  // ============================================
   describe('Performance Tests', () => {
+    // Performance Test - Tests concurrent threat report creation under load
     it('should handle concurrent threat report submissions', async () => {
       const threatData = {
         threatType: 'POACHING',
@@ -686,6 +711,7 @@ describe('Threat Report Controller Tests', () => {
       expect(duration).toBeLessThan(5000);
     });
 
+    // Performance Test - Tests concurrent read operations
     it('should handle multiple concurrent GET requests efficiently', async () => {
       await ThreatReport.create({
         reportId: 'TR-PERF-001',
@@ -715,6 +741,7 @@ describe('Threat Report Controller Tests', () => {
       expect(duration).toBeLessThan(3000);
     });
 
+    // Performance Test - Tests pagination performance with large dataset
     it('should maintain response time under load for pagination', async () => {
       for (let i = 0; i < 50; i++) {
         await ThreatReport.create({
@@ -740,6 +767,7 @@ describe('Threat Report Controller Tests', () => {
       expect(response.body.reports).toHaveLength(10);
     });
 
+    // Performance Test - Tests statistics aggregation performance with 100 records
     it('should handle statistics aggregation efficiently', async () => {
       for (let i = 0; i < 100; i++) {
         await ThreatReport.create({

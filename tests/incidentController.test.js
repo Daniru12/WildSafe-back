@@ -6,6 +6,11 @@ const User = require('../models/User');
 const Incident = require('../models/Incident');
 
 describe('Incident Controller Tests', () => {
+  // ============================================
+  // INTEGRATION TESTS
+  // These tests verify the complete API endpoints
+  // including authentication, validation, and database operations
+  // ============================================
   let citizenToken, officerToken, adminToken;
   let citizenUser, officerUser, adminUser;
   let testIncident;
@@ -53,6 +58,8 @@ describe('Incident Controller Tests', () => {
     await Incident.deleteMany({});
   });
 
+  // Integration Tests - POST /api/incidents - createIncident
+  // Tests the incident creation endpoint with various scenarios
   describe('POST /api/incidents - createIncident', () => {
     const incidentData = {
       title: 'Test Incident',
@@ -133,6 +140,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/incidents/mine - getMyIncidents
+  // Tests retrieving incidents for the logged-in user
   describe('GET /api/incidents/mine - getMyIncidents', () => {
     beforeEach(async () => {
       await Incident.create({
@@ -189,6 +198,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/incidents/:id - getIncidentById
+  // Tests retrieving a specific incident by ID
   describe('GET /api/incidents/:id - getIncidentById', () => {
     beforeEach(async () => {
       testIncident = await Incident.create({
@@ -247,6 +258,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/incidents/all - getAllIncidents
+  // Tests retrieving all incidents with filtering capabilities
   describe('GET /api/incidents/all - getAllIncidents', () => {
     beforeEach(async () => {
       await Incident.create({
@@ -318,6 +331,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - PATCH /api/incidents/:id/status - updateStatus
+  // Tests updating incident status by authorized users
   describe('PATCH /api/incidents/:id/status - updateStatus', () => {
     beforeEach(async () => {
       testIncident = await Incident.create({
@@ -372,6 +387,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - PATCH /api/incidents/:id/assign - assignIncident
+  // Tests assigning incidents to officers by admin
   describe('PATCH /api/incidents/:id/assign - assignIncident', () => {
     beforeEach(async () => {
       testIncident = await Incident.create({
@@ -429,6 +446,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - Full Workflow
+  // Tests complete incident lifecycle workflows
   describe('Integration Tests - Full Workflow', () => {
     it('should complete full incident lifecycle: create, view, update status, assign', async () => {
       const incidentData = {
@@ -551,7 +570,13 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // ============================================
+  // PERFORMANCE TESTS
+  // These tests evaluate the speed, scalability, and
+  // responsiveness of the API under various loads
+  // ============================================
   describe('Performance Tests', () => {
+    // Performance Test - Tests concurrent incident creation under load
     it('should handle concurrent incident submissions', async () => {
       const incidentData = {
         title: 'Performance Test Incident',
@@ -583,6 +608,7 @@ describe('Incident Controller Tests', () => {
       expect(duration).toBeLessThan(5000);
     });
 
+    // Performance Test - Tests concurrent read operations
     it('should handle multiple concurrent GET requests efficiently', async () => {
       for (let i = 0; i < 20; i++) {
         await Incident.create({
@@ -613,6 +639,7 @@ describe('Incident Controller Tests', () => {
       expect(duration).toBeLessThan(3000);
     });
 
+    // Performance Test - Tests average and max response times for incident creation
     it('should maintain response time under load for incident creation', async () => {
       const incidentData = {
         title: 'Load Test Incident',
@@ -645,6 +672,7 @@ describe('Incident Controller Tests', () => {
       expect(maxTime).toBeLessThan(5000);
     }, 60000);
 
+    // Performance Test - Tests query performance with 100 records
     it('should handle large dataset queries efficiently', async () => {
       for (let i = 0; i < 100; i++) {
         await Incident.create({
@@ -670,6 +698,7 @@ describe('Incident Controller Tests', () => {
       expect(response.body).toHaveLength(100);
     });
 
+    // Performance Test - Tests filtered query performance
     it('should handle filtered queries efficiently', async () => {
       for (let i = 0; i < 100; i++) {
         await Incident.create({
@@ -698,6 +727,7 @@ describe('Incident Controller Tests', () => {
       });
     });
 
+    // Performance Test - Tests concurrent write operations (status updates)
     it('should handle concurrent status updates', async () => {
       const incidents = [];
       for (let i = 0; i < 10; i++) {
@@ -732,6 +762,7 @@ describe('Incident Controller Tests', () => {
       expect(duration).toBeLessThan(3000);
     });
 
+    // Performance Test - Tests concurrent write operations (assignments)
     it('should handle concurrent incident assignments', async () => {
       const incidents = [];
       for (let i = 0; i < 10; i++) {
@@ -766,6 +797,7 @@ describe('Incident Controller Tests', () => {
       expect(duration).toBeLessThan(3000);
     });
 
+    // Performance Test - Tests pagination performance with large dataset
     it('should maintain performance with pagination', async () => {
       for (let i = 0; i < 100; i++) {
         await Incident.create({
