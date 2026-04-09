@@ -2,7 +2,21 @@ const express = require('express');
 const router = express.Router();
 const ThreatReport = require('../models/ThreatReport');
 const Case = require('../models/Case');
+const { notifyByRole } = require('../controllers/notificationController');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
+
+const mapThreatUrgencyToPriority = (urgencyLevel) => {
+    switch (urgencyLevel) {
+        case 'CRITICAL':
+            return 'URGENT';
+        case 'HIGH':
+            return 'HIGH';
+        case 'LOW':
+            return 'LOW';
+        default:
+            return 'MEDIUM';
+    }
+};
 
 // Generate unique report ID
 const generateReportId = () => {
@@ -77,6 +91,25 @@ router.post('/', async (req, res) => {
         });
 
         await threatReport.save();
+
+        try {
+            await notifyByRole(['ADMIN'], {
+                title: 'New Threat Report Submitted',
+                message: `New threat report has arrived (${threatReport.reportId}) for ${threatReport.threatType.replace(/_/g, ' ')}.`,
+                type: 'SYSTEM',
+                priority: mapThreatUrgencyToPriority(threatReport.urgencyLevel),
+                metadata: {
+                    source: 'THREAT_REPORT',
+                    reportId: threatReport.reportId,
+                    threatType: threatReport.threatType,
+                    location: threatReport.location,
+                    submittedAt: threatReport.createdAt,
+                    reporterName: threatReport.reporterInfo?.name || 'Unknown'
+                }
+            });
+        } catch (notificationError) {
+            console.error('Threat report saved but admin notification failed:', notificationError);
+        }
 
         res.status(201).json({
             message: 'Threat report submitted successfully',
