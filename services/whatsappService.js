@@ -65,9 +65,10 @@ async function sendWhatsAppMessage(phone, message) {
  * @param {string} alertTitle   - Title of the alert
  * @param {string} alertMessage - Body message
  * @param {string} category     - 'EMERGENCY' | 'WARNING' | 'INFO' | 'ANNOUNCEMENT'
+ * @param {Array}  awarenessItems - Optional awareness guidelines attached to this alert
  * @returns {{ sent: number, failed: number, total: number }}
  */
-async function sendBulkWhatsAppAlerts(users, alertTitle, alertMessage, category) {
+async function sendBulkWhatsAppAlerts(users, alertTitle, alertMessage, category, awarenessItems = []) {
     // Choose an appropriate emoji based on category
     const emojiMap = {
         EMERGENCY: '🚨',
@@ -77,10 +78,23 @@ async function sendBulkWhatsAppAlerts(users, alertTitle, alertMessage, category)
     };
     const emoji = emojiMap[category] || '🔔';
 
+    const awarenessSummary = Array.isArray(awarenessItems)
+        ? awarenessItems
+            .slice(0, 2)
+            .map((item, index) => {
+                const title = item?.title || `Guideline ${index + 1}`;
+                const content = (item?.content || '').replace(/\s+/g, ' ').trim();
+                const shortContent = content.length > 140 ? `${content.substring(0, 140)}...` : content;
+                return `${index + 1}. ${title}${shortContent ? ` - ${shortContent}` : ''}`;
+            })
+            .join('\n')
+        : '';
+
     const formattedMessage =
         `${emoji} *WildSafe Alert* ${emoji}\n\n` +
         `*${alertTitle}*\n\n` +
         `${alertMessage}\n\n` +
+        `${awarenessSummary ? `*Related Awareness Guidelines:*\n${awarenessSummary}\n\n` : ''}` +
         `_This is an automated safety alert from WildSafe. Please follow official guidelines._`;
 
     // Normalize and validate phone numbers before attempting to send.
