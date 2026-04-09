@@ -270,9 +270,9 @@ class SmartAlertService {
   //
   // alertData shape (from Alert model):
   //   { _id, title, category, location: { type:'Point', coordinates:[lng,lat] } }
-  // radiusKm defaults to 10 km.
+  // radiusKm defaults to 5 km.
   // -------------------------------------------------------
-  static async handleNewAlert(alertData, radiusKm = 10) {
+  static async handleNewAlert(alertData, radiusKm = 5) {
     try {
       const radiusMeters = radiusKm * 1000;
 
@@ -288,6 +288,7 @@ class SmartAlertService {
         try {
           nearbyUsers = await User.find({
             status: 'ACTIVE',
+            role: { $in: alertData.targetRoles || ['CITIZEN', 'OFFICER'] },
             location: {
               $near: {
                 $geometry: {
