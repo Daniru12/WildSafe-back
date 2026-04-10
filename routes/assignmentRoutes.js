@@ -4,6 +4,21 @@ const User = require('../models/User');
 const Team = require('../models/Team');
 const Case = require('../models/Case');
 const { authMiddleware } = require('../middleware/auth');
+const { createNotification } = require('../controllers/notificationController');
+
+const getCaseAssignmentNotificationPayload = (caseDoc, assignmentNotes) => ({
+    title: `New Case Assigned: ${caseDoc.caseId}`,
+    message: `Case ${caseDoc.caseId} has been assigned to you. Threat: ${caseDoc.threatType}. Priority: ${caseDoc.priority}. Location: ${caseDoc.location?.address || 'N/A'}${assignmentNotes ? `. Notes: ${assignmentNotes}` : ''}`,
+    type: 'ASSIGNMENT',
+    priority: caseDoc.priority === 'CRITICAL' ? 'URGENT' : 'HIGH',
+    metadata: {
+        caseId: caseDoc.caseId,
+        threatType: caseDoc.threatType,
+        casePriority: caseDoc.priority,
+        location: caseDoc.location,
+        assignmentNotes: assignmentNotes || null
+    }
+});
 
 // GET /api/assignment/officers - Get available officers for assignment
 router.get('/officers', authMiddleware, async (req, res) => {
@@ -153,6 +168,13 @@ router.post('/auto-assign', authMiddleware, async (req, res) => {
         }
         
         await case_.save();
+
+        if (assignmentType === 'OFFICER' && case_.assignedOfficer) {
+            createNotification(
+                case_.assignedOfficer,
+                getCaseAssignmentNotificationPayload(case_)
+            ).catch(err => console.error('Notification error (case auto-assign):', err));
+        }
         
         res.json({
             message: 'Case assigned successfully',
@@ -219,6 +241,14 @@ router.post('/bulk-assign', authMiddleware, async (req, res) => {
                 }
                 
                 await case_.save();
+
+                if (officerId) {
+                    createNotification(
+                        officerId,
+                        getCaseAssignmentNotificationPayload(case_, assignmentNotes)
+                    ).catch(err => console.error(`Notification error (bulk assign ${caseId}):`, err));
+                }
+
                 results.push({ caseId, success: true });
             } catch (error) {
                 results.push({ caseId, success: false, error: error.message });
