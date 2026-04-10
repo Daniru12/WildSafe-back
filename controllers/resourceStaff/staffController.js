@@ -1,9 +1,18 @@
 const Staff = require('../../models/resourceStaff/Staff');
 const User = require('../../models/User');
+const mongoose = require('mongoose');
 
 const createStaff = async (req, res) => {
     try {
         const { userId, department, permissions } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({ message: 'userId is required' });
+        }
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ message: 'Invalid userId format' });
+        }
 
         const user = await User.findById(userId);
         if (!user) return res.status(404).json({ message: 'User not found' });
