@@ -1,6 +1,159 @@
 const Alert = require('../models/Alert');
 const User = require('../models/User');
 const SmartAlertService = require('../services/smartAlertService');
+const AwarenessContent = require('../models/awareness/AwarenessContent');
+
+const VALID_ALERT_TYPES = ['fire', 'poaching', 'illegal-logging', 'weather', 'general'];
+const AWARENESS_GUIDELINE_LIMIT = 2;
+
+const DEFAULT_AWARENESS_BY_TYPE = {
+  fire: [
+    {
+      title: 'Fire Evacuation Basics',
+      content: 'Move to a safe open area away from smoke. Follow ranger and emergency unit instructions. Do not return until officials clear the area.',
+      category: 'fire-safety'
+    },
+    {
+      title: 'Protect Wildlife During Fire',
+      content: 'Avoid entering habitat zones during active fire response. Report trapped wildlife to officers and keep access roads clear for rescue teams.',
+      category: 'fire-safety'
+    }
+  ],
+  poaching: [
+    {
+      title: 'Report Poaching Safely',
+      content: 'Do not confront suspects directly. Record location, time, and visible details, then report immediately through official WildSafe channels.',
+      category: 'poaching'
+    },
+    {
+      title: 'Preserve Evidence at Scene',
+      content: 'Keep distance from traps, shells, footprints, or carcasses. Avoid touching items and wait for authorized officers to process the scene.',
+      category: 'poaching'
+    }
+  ],
+  'illegal-logging': [
+    {
+      title: 'Illegal Logging Response',
+      content: 'Do not engage loggers directly. Share exact coordinates, vehicle details, and route information with enforcement teams as quickly as possible.',
+      category: 'general'
+    },
+    {
+      title: 'Protect Forest Access Routes',
+      content: 'Keep ranger access routes open and avoid moving equipment or cut timber at the location until officials document the area.',
+      category: 'general'
+    }
+  ],
+  weather: [
+    {
+      title: 'Severe Weather Safety Steps',
+      content: 'Move to safe shelter, avoid flood-prone streams and trees during storms, and follow official advisories before resuming field movement.',
+      category: 'general'
+    },
+    {
+      title: 'Post-Weather Area Check',
+      content: 'Inspect trails for fallen trees, erosion, and blocked routes. Report hazards quickly to prevent secondary incidents.',
+      category: 'general'
+    }
+  ],
+  general: [
+    {
+      title: 'Emergency First Actions',
+      content: 'Stay calm, move to safe ground, share your live location if possible, and wait for instructions from authorized officers.',
+      category: 'general'
+    },
+    {
+      title: 'Community Safety Coordination',
+      content: 'Use verified channels for updates, avoid rumor sharing, and prioritize vulnerable people during emergency response.',
+      category: 'general'
+    }
+  ]
+};
+
+const CATEGORY_TO_ALERT_TYPE = {
+  EMERGENCY: 'fire',
+  WARNING: 'poaching',
+  INFO: 'general',
+  ANNOUNCEMENT: 'general'
+};
+
+function dedupeAwareness(items = []) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const id = item?._id?.toString?.() || item?._id || item?.id;
+    const contentKey = `${(item?.title || '').trim().toLowerCase()}|${(item?.content || '').trim().toLowerCase()}`;
+    const key = id || contentKey;
+
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+async function ensureDefaultAwarenessForType(alertType) {
+  const templates = DEFAULT_AWARENESS_BY_TYPE[alertType] || [];
+
+  if (templates.length === 0) {
+    return;
+  }
+
+  await Promise.all(
+    templates.map((template) =>
+      AwarenessContent.findOneAndUpdate(
+        {
+          title: template.title,
+          triggers: alertType
+        },
+        {
+          $setOnInsert: {
+            title: template.title,
+            content: template.content,
+            category: template.category,
+            triggers: [alertType],
+            isActive: true
+          }
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      )
+    )
+  );
+}
+
+async function fetchAwarenessByQuery(query, limit = AWARENESS_GUIDELINE_LIMIT) {
+  const items = await AwarenessContent.find(query)
+    .select('_id title category content triggers')
+    .sort({ createdAt: -1 })
+    .limit(limit);
+
+  return dedupeAwareness(items).slice(0, limit);
+}
+
+async function getAwarenessForAlertType(alertType, awarenessIds = []) {
+  const query = { isActive: true };
+
+  if (Array.isArray(awarenessIds) && awarenessIds.length > 0) {
+    query._id = { $in: awarenessIds };
+  } else {
+    query.triggers = alertType;
+  }
+
+  let awarenessItems = await fetchAwarenessByQuery(query);
+
+  if (awarenessItems.length === 0 && (!Array.isArray(awarenessIds) || awarenessIds.length === 0)) {
+    await ensureDefaultAwarenessForType(alertType);
+    awarenessItems = await fetchAwarenessByQuery({ isActive: true, triggers: alertType });
+  }
+
+  if (awarenessItems.length === 0 && alertType !== 'general' && (!Array.isArray(awarenessIds) || awarenessIds.length === 0)) {
+    await ensureDefaultAwarenessForType('general');
+    awarenessItems = await fetchAwarenessByQuery({ isActive: true, triggers: 'general' });
+  }
+
+  return awarenessItems;
+}
 
 // Get all alerts for the logged-in user
 exports.getAlerts = async (req, res) => {
@@ -30,6 +183,7 @@ exports.getAlerts = async (req, res) => {
     const alerts = await Alert.find(filter)
       .populate('createdBy', 'name email role')
       .populate('relatedIncident', 'title status category')
+      .populate('relatedAwareness', 'title category content triggers')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(skip);
@@ -145,10 +299,16 @@ exports.markAllAsRead = async (req, res) => {
 // Send emergency alert (URGENT)
 exports.sendEmergencyAlert = async (req, res) => {
   try {
-    const { title, message, location, expiresAt, targetRoles } = req.body;
+    const { title, message, location, expiresAt, targetRoles, alertType = 'fire', awarenessIds = [] } = req.body;
 
     if (!title || !message) {
       return res.status(400).json({ message: 'Title and message are required' });
+    }
+
+    if (!VALID_ALERT_TYPES.includes(alertType)) {
+      return res.status(400).json({
+        message: `Invalid alertType. Valid values: ${VALID_ALERT_TYPES.join(', ')}`
+      });
     }
 
     // Use provided targetRoles or default to OFFICER + ADMIN
@@ -157,15 +317,19 @@ exports.sendEmergencyAlert = async (req, res) => {
       ? targetRoles
       : ['OFFICER', 'ADMIN'];
 
+    const awarenessItems = await getAwarenessForAlertType(alertType, awarenessIds);
+
     const alert = await Alert.create({
       title,
       message,
       category: 'EMERGENCY',
+      alertType,
       priority: 'URGENT',
       createdBy: req.user.id,
       targetRoles: roles,
       location,
-      expiresAt
+      expiresAt,
+      relatedAwareness: awarenessItems.map(item => item._id)
     });
 
     // Count target users for response
@@ -179,16 +343,18 @@ exports.sendEmergencyAlert = async (req, res) => {
       console.error('[sendEmergencyAlert] handleNewAlert error:', err);
       return { notified: 0, awarenessAttached: 0, whatsapp: { sent: 0, failed: 0, total: 0, recipients: [] } };
     });
+    const whatsappDelivery = alertResult?.whatsapp || { sent: 0, failed: 0, total: 0, recipients: [] };
 
     res.status(201).json({
       message: `Emergency alert sent to ${targetUserCount} users`,
       alert,
       recipientsCount: targetUserCount,
+      awarenessGuidelines: awarenessItems,
       whatsappDelivery: {
-        sent: alertResult.whatsapp?.sent ?? 0,
-        failed: alertResult.whatsapp?.failed ?? 0,
-        total: alertResult.whatsapp?.total ?? 0,
-        recipients: alertResult.whatsapp?.recipients ?? []
+        sent: whatsappDelivery.sent ?? 0,
+        failed: whatsappDelivery.failed ?? 0,
+        total: whatsappDelivery.total ?? 0,
+        recipients: whatsappDelivery.recipients ?? []
       }
     });
   } catch (error) {
@@ -208,7 +374,9 @@ exports.sendCustomAlert = async (req, res) => {
       priority = 'MEDIUM',
       location,
       expiresAt,
-      relatedIncident
+      relatedIncident,
+      alertType,
+      awarenessIds = []
     } = req.body;
 
     if (!Array.isArray(targetRoles) || targetRoles.length === 0) {
@@ -226,16 +394,27 @@ exports.sendCustomAlert = async (req, res) => {
       return res.status(400).json({ message: `Invalid roles: ${invalidRoles.join(', ')}` });
     }
 
+    const resolvedAlertType = alertType || CATEGORY_TO_ALERT_TYPE[category] || 'general';
+    if (!VALID_ALERT_TYPES.includes(resolvedAlertType)) {
+      return res.status(400).json({
+        message: `Invalid alertType. Valid values: ${VALID_ALERT_TYPES.join(', ')}`
+      });
+    }
+
+    const awarenessItems = await getAwarenessForAlertType(resolvedAlertType, awarenessIds);
+
     const alert = await Alert.create({
       title,
       message,
       category,
+      alertType: resolvedAlertType,
       priority,
       createdBy: req.user.id,
       targetRoles,
       location,
       expiresAt,
-      relatedIncident
+      relatedIncident,
+      relatedAwareness: awarenessItems.map(item => item._id)
     });
 
     // Count target users for response
@@ -249,16 +428,18 @@ exports.sendCustomAlert = async (req, res) => {
       console.error('[sendCustomAlert] handleNewAlert error:', err);
       return { notified: 0, awarenessAttached: 0, whatsapp: { sent: 0, failed: 0, total: 0, recipients: [] } };
     });
+    const whatsappDelivery = alertResult?.whatsapp || { sent: 0, failed: 0, total: 0, recipients: [] };
 
     res.status(201).json({
       message: `Alert sent to ${targetUserCount} users`,
       alert,
       recipientsCount: targetUserCount,
+      awarenessGuidelines: awarenessItems,
       whatsappDelivery: {
-        sent: alertResult.whatsapp?.sent ?? 0,
-        failed: alertResult.whatsapp?.failed ?? 0,
-        total: alertResult.whatsapp?.total ?? 0,
-        recipients: alertResult.whatsapp?.recipients ?? []
+        sent: whatsappDelivery.sent ?? 0,
+        failed: whatsappDelivery.failed ?? 0,
+        total: whatsappDelivery.total ?? 0,
+        recipients: whatsappDelivery.recipients ?? []
       }
     });
   } catch (error) {
@@ -324,6 +505,7 @@ exports.getAllAlerts = async (req, res) => {
       Alert.find(filter)
         .populate('createdBy', 'name email role')
         .populate('relatedIncident', 'title status category')
+        .populate('relatedAwareness', 'title category content triggers')
         .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .skip(skip),
@@ -395,6 +577,7 @@ exports.getLocationBasedAlerts = async (req, res) => {
       ]
     })
       .populate('createdBy', 'name role')
+      .populate('relatedAwareness', 'title category content triggers')
       .sort({ createdAt: -1 });
 
     res.json({

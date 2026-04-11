@@ -8,7 +8,10 @@
     "dev": "nodemon server.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "test:integration": "jest --testPathPatterns=tests/notification/.*\\.integration\\.test\\.js$",
+    "test:performance": "jest --testPathPatterns=tests/notification/.*\\.performance\\.test\\.js$",
+    "test:notif-alert-awareness": "npm run test:integration && npm run test:performance"
   },
   "repository": {
     "type": "git",
@@ -42,6 +45,7 @@
     "twilio": "^5.12.2"
   },
   "devDependencies": {
+    "autocannon": "^8.0.0",
     "jest": "^30.2.0",
     "nodemon": "^3.1.11",
     "supertest": "^7.2.2"
