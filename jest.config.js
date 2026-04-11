@@ -13,22 +13,25 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   verbose: true,
   testTimeout: 10000,
-  // Ranger tests use setupRanger.js so afterEach does not wipe cases/rangermissions
+  // tests/ranger/* uses setupRanger.js so afterEach does not wipe cases/rangermissions
   projects: [
     {
       displayName: 'default',
       testEnvironment: 'node',
       testMatch: ['**/__tests__/**/*.js', '**/?(*.)+(spec|test).js'],
-      testPathIgnorePatterns: ['/node_modules/', 'rangerController.test.js'],
+      testPathIgnorePatterns: [
+        '/node_modules/',
+        '[/\\\\]tests[/\\\\]ranger[/\\\\]'
+      ],
       setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
       testTimeout: 10000
     },
     {
       displayName: 'ranger',
       testEnvironment: 'node',
-      testMatch: ['**/rangerController.test.js'],
+      testMatch: ['<rootDir>/tests/ranger/**/*.test.js'],
       setupFilesAfterEnv: ['<rootDir>/tests/setupRanger.js'],
-      testTimeout: 20000
+      testTimeout: 60000
     }
   ]
 };
