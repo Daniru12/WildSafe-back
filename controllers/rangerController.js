@@ -1,3 +1,7 @@
+/**
+ * Ranger (field officer) API — everything here assumes the user is the assigned officer on the case.
+ * Case assignment lives on Case.assignedOfficer; mission workflow + evidence live on RangerMission (one per case).
+ */
 const mongoose = require('mongoose');
 const Case = require('../models/Case');
 const ThreatReport = require('../models/ThreatReport');
@@ -18,6 +22,7 @@ const getMyAssignedCases = async (req, res) => {
         const caseFilter = { assignedOfficer: userId };
 
         let caseIds;
+        // When filtering by mission state, paginate missions first — Case doesn't know rangerStatus.
         if (rangerStatus) {
             const missions = await RangerMission.find({
                 assignedTo: userId,
@@ -42,6 +47,7 @@ const getMyAssignedCases = async (req, res) => {
         )
             .populate('threatReportId', 'description media reportId')
             .sort({ createdAt: -1 })
+            // Filtered path: skip is already applied via missions; keep order aligned with caseIds.
             .limit(caseIds ? caseIds.length : limitNum)
             .skip(caseIds ? 0 : skip)
             .lean();
@@ -55,6 +61,7 @@ const getMyAssignedCases = async (req, res) => {
             if (!c) continue;
 
             let mission = await RangerMission.findOne({ caseId: c.caseId });
+            // Older cases may exist before we added missions — backfill so the app always has a row to track status.
             if (!mission) {
                 mission = await RangerMission.create({
                     caseId: c.caseId,
@@ -198,6 +205,7 @@ const declineMission = async (req, res) => {
             }
         );
 
+        // Clear assignment so dispatch can hand the case to someone else — mission stays DECLINED for audit.
         caseDoc.assignedOfficer = undefined;
         await caseDoc.save();
 
@@ -424,6 +432,7 @@ const addEvidence = async (req, res) => {
         }
 
         const files = req.files || [];
+        // Optional pin; multer often leaves coords in body even when photos are uploaded.
         const gps =
             gpsLat != null && gpsLng != null
                 ? { lat: Number(gpsLat), lng: Number(gpsLng) }
@@ -443,6 +452,7 @@ const addEvidence = async (req, res) => {
                 uploadedBy: userId
             });
         }
+        // No files but they typed something — still worth capturing as a structured REPORT row.
         if (evidenceItems.length === 0 && (description || notes || conditionSummary)) {
             evidenceItems.push({
                 url: 'text-report',
@@ -582,6 +592,7 @@ const closeCase = async (req, res) => {
             }
         );
 
+        // Mirror the outcome onto Case so the case-management side sees RESOLVED without calling ranger APIs.
         caseDoc.resolution = {
             actionSummary: actionTaken,
             outcome: solutionProvided,
