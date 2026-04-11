@@ -19,6 +19,13 @@ const alertSchema = new mongoose.Schema({
     required: true
   },
 
+  // Specific emergency/alert type used to resolve awareness guidelines
+  alertType: {
+    type: String,
+    enum: ['fire', 'poaching', 'illegal-logging', 'weather', 'general'],
+    default: 'general'
+  },
+
   priority: {
     type: String,
     enum: ['LOW', 'MEDIUM', 'HIGH', 'URGENT'],
@@ -42,6 +49,12 @@ const alertSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Incident'
   },
+
+  // Awareness guidelines explicitly linked to this alert
+  relatedAwareness: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'AwarenessContent'
+  }],
 
   // For enabling/disabling alerts
   isActive: {
@@ -77,9 +90,11 @@ const alertSchema = new mongoose.Schema({
 
 // Indexes
 alertSchema.index({ category: 1, priority: 1 });
+alertSchema.index({ alertType: 1, isActive: 1 });
 alertSchema.index({ createdBy: 1, createdAt: -1 });
 alertSchema.index({ targetRoles: 1, isActive: 1 });
 alertSchema.index({ expiresAt: 1 });
+alertSchema.index({ relatedAwareness: 1 });
 alertSchema.index({ location: '2dsphere' });
 
 // Check if alert is expired

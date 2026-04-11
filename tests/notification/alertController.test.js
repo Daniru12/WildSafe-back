@@ -3,10 +3,12 @@
 
 jest.mock('../../models/Alert');
 jest.mock('../../models/User');
+jest.mock('../../models/awareness/AwarenessContent');
 jest.mock('../../services/smartAlertService');
 
 const Alert = require('../../models/Alert');
 const User = require('../../models/User');
+const AwarenessContent = require('../../models/awareness/AwarenessContent');
 const SmartAlertService = require('../../services/smartAlertService');
 
 const {
@@ -77,6 +79,11 @@ describe('sendEmergencyAlert', () => {
     afterEach(() => jest.clearAllMocks());
 
     test('201 – sends emergency alert', async () => {
+        AwarenessContent.find.mockReturnValue({
+            select: jest.fn().mockReturnThis(),
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockResolvedValue([{ _id: 'aw1', title: 'Fire Safety' }]),
+        });
         Alert.create.mockResolvedValue({ _id: 'al1', title: 'Fire!', category: 'EMERGENCY' });
         User.countDocuments.mockResolvedValue(5);
         SmartAlertService.handleNewAlert.mockResolvedValue(undefined);
@@ -107,6 +114,11 @@ describe('sendCustomAlert', () => {
     afterEach(() => jest.clearAllMocks());
 
     test('201 – sends custom alert to specified roles', async () => {
+        AwarenessContent.find.mockReturnValue({
+            select: jest.fn().mockReturnThis(),
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockResolvedValue([{ _id: 'aw2', title: 'General Safety' }]),
+        });
         Alert.create.mockResolvedValue({ _id: 'al2', title: 'Update', category: 'INFO' });
         User.countDocuments.mockResolvedValue(10);
         SmartAlertService.handleNewAlert.mockResolvedValue(undefined);
