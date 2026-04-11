@@ -1,6 +1,120 @@
 const AwarenessContent = require('../models/awareness/AwarenessContent');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const AWARENESS_GUIDELINE_LIMIT = 2;
+
+const DEFAULT_AWARENESS_BY_TYPE = {
+    fire: [
+        {
+            title: 'Fire Evacuation Basics',
+            content: 'Move to a safe open area away from smoke. Follow ranger and emergency unit instructions. Do not return until officials clear the area.',
+            category: 'fire-safety'
+        },
+        {
+            title: 'Protect Wildlife During Fire',
+            content: 'Avoid entering habitat zones during active fire response. Report trapped wildlife to officers and keep access roads clear for rescue teams.',
+            category: 'fire-safety'
+        }
+    ],
+    poaching: [
+        {
+            title: 'Report Poaching Safely',
+            content: 'Do not confront suspects directly. Record location, time, and visible details, then report immediately through official WildSafe channels.',
+            category: 'poaching'
+        },
+        {
+            title: 'Preserve Evidence at Scene',
+            content: 'Keep distance from traps, shells, footprints, or carcasses. Avoid touching items and wait for authorized officers to process the scene.',
+            category: 'poaching'
+        }
+    ],
+    'illegal-logging': [
+        {
+            title: 'Illegal Logging Response',
+            content: 'Do not engage loggers directly. Share exact coordinates, vehicle details, and route information with enforcement teams as quickly as possible.',
+            category: 'general'
+        },
+        {
+            title: 'Protect Forest Access Routes',
+            content: 'Keep ranger access routes open and avoid moving equipment or cut timber at the location until officials document the area.',
+            category: 'general'
+        }
+    ],
+    weather: [
+        {
+            title: 'Severe Weather Safety Steps',
+            content: 'Move to safe shelter, avoid flood-prone streams and trees during storms, and follow official advisories before resuming field movement.',
+            category: 'general'
+        },
+        {
+            title: 'Post-Weather Area Check',
+            content: 'Inspect trails for fallen trees, erosion, and blocked routes. Report hazards quickly to prevent secondary incidents.',
+            category: 'general'
+        }
+    ],
+    general: [
+        {
+            title: 'Emergency First Actions',
+            content: 'Stay calm, move to safe ground, share your live location if possible, and wait for instructions from authorized officers.',
+            category: 'general'
+        },
+        {
+            title: 'Community Safety Coordination',
+            content: 'Use verified channels for updates, avoid rumor sharing, and prioritize vulnerable people during emergency response.',
+            category: 'general'
+        }
+    ]
+};
+
+function dedupeAwareness(items = []) {
+    const seen = new Set();
+    return items.filter((item) => {
+        const id = item?._id?.toString?.() || item?._id || item?.id;
+        const contentKey = `${(item?.title || '').trim().toLowerCase()}|${(item?.content || '').trim().toLowerCase()}`;
+        const key = id || contentKey;
+
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function limitAwareness(items = []) {
+    return items.slice(0, AWARENESS_GUIDELINE_LIMIT);
+}
+
+async function ensureDefaultAwarenessForType(alertType) {
+    const templates = DEFAULT_AWARENESS_BY_TYPE[alertType] || [];
+
+    if (templates.length === 0) {
+        return;
+    }
+
+    await Promise.all(
+        templates.map((template) =>
+            AwarenessContent.findOneAndUpdate(
+                {
+                    title: template.title,
+                    triggers: alertType
+                },
+                {
+                    $setOnInsert: {
+                        title: template.title,
+                        content: template.content,
+                        category: template.category,
+                        triggers: [alertType],
+                        isActive: true
+                    }
+                },
+                {
+                    upsert: true,
+                    new: true,
+                    setDefaultsOnInsert: true
+                }
+            )
+        )
+    );
+}
 
 // -------------------------------------------------------
 // POST /awareness/
@@ -93,12 +207,36 @@ exports.getRelevantAwareness = async (req, res) => {
             });
         }
 
-        const items = await AwarenessContent.find({
+        let items = await AwarenessContent.find({
             triggers: alertType,
             isActive: true
         })
             .populate('createdBy', 'name role')
             .sort({ createdAt: -1 });
+
+        items = limitAwareness(dedupeAwareness(items));
+
+        if (items.length === 0) {
+            await ensureDefaultAwarenessForType(alertType);
+            items = await AwarenessContent.find({
+                triggers: alertType,
+                isActive: true
+            })
+                .populate('createdBy', 'name role')
+                .sort({ createdAt: -1 });
+            items = limitAwareness(dedupeAwareness(items));
+        }
+
+        if (items.length === 0 && alertType !== 'general') {
+            await ensureDefaultAwarenessForType('general');
+            items = await AwarenessContent.find({
+                triggers: 'general',
+                isActive: true
+            })
+                .populate('createdBy', 'name role')
+                .sort({ createdAt: -1 });
+            items = limitAwareness(dedupeAwareness(items));
+        }
 
         res.json({ alertType, awareness: items, count: items.length });
     } catch (error) {

@@ -31,9 +31,11 @@ const mockRes = () => {
 describe('createStaff', () => {
     afterEach(() => jest.clearAllMocks());
 
+    const validUserId = '507f191e810c19729de860ea';
+
     test('201 – creates staff and promotes user role to OFFICER', async () => {
-        const body = { userId: 'u1', department: 'Patrol', permissions: ['read'] };
-        const user = { _id: 'u1' };
+        const body = { userId: validUserId, department: 'Patrol', permissions: ['read'] };
+        const user = { _id: validUserId };
         const created = { _id: 's1', ...body };
 
         User.findById.mockResolvedValue(user);
@@ -45,10 +47,10 @@ describe('createStaff', () => {
         const res = mockRes();
         await createStaff(req, res);
 
-        expect(User.findById).toHaveBeenCalledWith('u1');
-        expect(Staff.findOne).toHaveBeenCalledWith({ userId: 'u1' });
+        expect(User.findById).toHaveBeenCalledWith(validUserId);
+        expect(Staff.findOne).toHaveBeenCalledWith({ userId: validUserId });
         expect(Staff.create).toHaveBeenCalledWith(body);
-        expect(User.findByIdAndUpdate).toHaveBeenCalledWith('u1', { role: 'OFFICER' });
+        expect(User.findByIdAndUpdate).toHaveBeenCalledWith(validUserId, { role: 'OFFICER' });
         expect(res.status).toHaveBeenCalledWith(201);
         expect(res.json).toHaveBeenCalledWith(created);
     });
@@ -56,7 +58,7 @@ describe('createStaff', () => {
     test('404 – user not found', async () => {
         User.findById.mockResolvedValue(null);
 
-        const req = mockReq({ userId: 'u-none' });
+        const req = mockReq({ userId: validUserId });
         const res = mockRes();
         await createStaff(req, res);
 
@@ -66,10 +68,10 @@ describe('createStaff', () => {
     });
 
     test('400 – staff already assigned to that user', async () => {
-        User.findById.mockResolvedValue({ _id: 'u1' });
+        User.findById.mockResolvedValue({ _id: validUserId });
         Staff.findOne.mockResolvedValue({ _id: 's-existing' });
 
-        const req = mockReq({ userId: 'u1' });
+        const req = mockReq({ userId: validUserId });
         const res = mockRes();
         await createStaff(req, res);
 
@@ -81,7 +83,7 @@ describe('createStaff', () => {
     test('500 – returns server error on DB failure', async () => {
         User.findById.mockRejectedValue(new Error('DB error'));
 
-        const req = mockReq({ userId: 'u1' });
+        const req = mockReq({ userId: validUserId });
         const res = mockRes();
         await createStaff(req, res);
 

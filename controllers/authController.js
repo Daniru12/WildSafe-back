@@ -10,7 +10,7 @@ const generateToken = (id) => {
 // @route   POST /api/auth/register
 // @access  Public
 exports.register = async (req, res) => {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, location } = req.body;
 
     try {
         // Basic input validation
@@ -22,11 +22,33 @@ exports.register = async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
+        let locationPayload;
+        if (
+            location &&
+            location.type === 'Point' &&
+            Array.isArray(location.coordinates) &&
+            location.coordinates.length === 2
+        ) {
+            const [lng, lat] = location.coordinates;
+            if (
+                Number.isFinite(lng) &&
+                Number.isFinite(lat) &&
+                lat >= -90 && lat <= 90 &&
+                lng >= -180 && lng <= 180
+            ) {
+                locationPayload = {
+                    type: 'Point',
+                    coordinates: [lng, lat]
+                };
+            }
+        }
+
         user = await User.create({
             name,
             email,
             password,
-            phone
+            phone,
+            location: locationPayload
         });
 
         res.status(201).json({

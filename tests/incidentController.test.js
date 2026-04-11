@@ -6,6 +6,11 @@ const User = require('../models/User');
 const Incident = require('../models/Incident');
 
 describe('Incident Controller Tests', () => {
+  // ============================================
+  // INTEGRATION TESTS
+  // These tests verify the complete API endpoints
+  // including authentication, validation, and database operations
+  // ============================================
   let citizenToken, officerToken, adminToken;
   let citizenUser, officerUser, adminUser;
   let testIncident;
@@ -53,6 +58,8 @@ describe('Incident Controller Tests', () => {
     await Incident.deleteMany({});
   });
 
+  // Integration Tests - POST /api/incidents - createIncident
+  // Tests the incident creation endpoint with various scenarios
   describe('POST /api/incidents - createIncident', () => {
     const incidentData = {
       title: 'Test Incident',
@@ -113,7 +120,7 @@ describe('Incident Controller Tests', () => {
         .post('/api/incidents')
         .set('Authorization', `Bearer ${citizenToken}`)
         .send(invalidData)
-        .expect(500); // Will return 500 due to MongoDB validation error
+        .expect(400); // Now returns 400 due to improved validation
     });
 
     it('should return 400 with invalid location coordinates', async () => {
@@ -129,10 +136,12 @@ describe('Incident Controller Tests', () => {
         .post('/api/incidents')
         .set('Authorization', `Bearer ${citizenToken}`)
         .send(invalidLocationData)
-        .expect(500); // Will return 500 due to MongoDB validation error
+        .expect(400); // Now returns 400 due to improved validation
     });
   });
 
+  // Integration Tests - GET /api/incidents/mine - getMyIncidents
+  // Tests retrieving incidents for the logged-in user
   describe('GET /api/incidents/mine - getMyIncidents', () => {
     beforeEach(async () => {
       await Incident.create({
@@ -189,6 +198,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/incidents/:id - getIncidentById
+  // Tests retrieving a specific incident by ID
   describe('GET /api/incidents/:id - getIncidentById', () => {
     beforeEach(async () => {
       testIncident = await Incident.create({
@@ -247,6 +258,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - GET /api/incidents/all - getAllIncidents
+  // Tests retrieving all incidents with filtering capabilities
   describe('GET /api/incidents/all - getAllIncidents', () => {
     beforeEach(async () => {
       await Incident.create({
@@ -318,6 +331,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - PATCH /api/incidents/:id/status - updateStatus
+  // Tests updating incident status by authorized users
   describe('PATCH /api/incidents/:id/status - updateStatus', () => {
     beforeEach(async () => {
       testIncident = await Incident.create({
@@ -372,6 +387,8 @@ describe('Incident Controller Tests', () => {
     });
   });
 
+  // Integration Tests - PATCH /api/incidents/:id/assign - assignIncident
+  // Tests assigning incidents to officers by admin
   describe('PATCH /api/incidents/:id/assign - assignIncident', () => {
     beforeEach(async () => {
       testIncident = await Incident.create({
@@ -427,5 +444,382 @@ describe('Incident Controller Tests', () => {
 
       expect(response.body.message).toBe('Incident not found');
     });
+  });
+
+  // Integration Tests - Full Workflow
+  // Tests complete incident lifecycle workflows
+  describe('Integration Tests - Full Workflow', () => {
+    it('should complete full incident lifecycle: create, view, update status, assign', async () => {
+      const incidentData = {
+        title: 'Integration Test Incident',
+        description: 'Testing full workflow',
+        category: 'POACHING',
+        location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' }
+      };
+
+      const createResponse = await request(app)
+        .post('/api/incidents')
+        .set('Authorization', `Bearer ${citizenToken}`)
+        .send(incidentData)
+        .expect(201);
+
+      const incidentId = createResponse.body._id;
+
+      const viewResponse = await request(app)
+        .get(`/api/incidents/${incidentId}`)
+        .set('Authorization', `Bearer ${citizenToken}`)
+        .expect(200);
+
+      expect(viewResponse.body._id).toBe(incidentId);
+
+      const updateResponse = await request(app)
+        .patch(`/api/incidents/${incidentId}/status`)
+        .set('Authorization', `Bearer ${officerToken}`)
+        .send({ status: 'IN_PROGRESS' })
+        .expect(200);
+
+      expect(updateResponse.body.status).toBe('IN_PROGRESS');
+
+      const assignResponse = await request(app)
+        .patch(`/api/incidents/${incidentId}/assign`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ assignedTo: officerUser._id, priority: 'HIGH' })
+        .expect(200);
+
+      expect(assignResponse.body.assignedTo).toBe(officerUser._id.toString());
+      expect(assignResponse.body.priority).toBe('HIGH');
+    });
+
+    it('should handle multiple incidents with different categories', async () => {
+      const categories = ['POACHING', 'FOREST_FIRE', 'ILLEGAL_LOGGING', 'ANIMAL_CONFLICT'];
+
+      for (const category of categories) {
+        await request(app)
+          .post('/api/incidents')
+          .set('Authorization', `Bearer ${citizenToken}`)
+          .send({
+            title: `${category} Incident`,
+            description: `Testing ${category}`,
+            category: category,
+            location: { lat: 12.3456, lng: 78.9012 }
+          })
+          .expect(201);
+      }
+
+      const response = await request(app)
+        .get('/api/incidents/all')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+
+      expect(response.body).toHaveLength(4);
+
+      const poachingIncidents = await request(app)
+        .get('/api/incidents/all?category=POACHING')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+
+      expect(poachingIncidents.body).toHaveLength(1);
+      expect(poachingIncidents.body[0].category).toBe('POACHING');
+    });
+
+    it('should filter incidents by status across full dataset', async () => {
+      const statuses = ['SUBMITTED', 'IN_PROGRESS', 'RESOLVED'];
+
+      for (const status of statuses) {
+        const incident = await Incident.create({
+          title: `${status} Incident`,
+          description: `Testing ${status}`,
+          category: 'POACHING',
+          location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+          reporterId: citizenUser._id,
+          status: status
+        });
+      }
+
+      const inProgressResponse = await request(app)
+        .get('/api/incidents/all?status=IN_PROGRESS')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+
+      expect(inProgressResponse.body).toHaveLength(1);
+      expect(inProgressResponse.body[0].status).toBe('IN_PROGRESS');
+    });
+
+    it('should handle incident with assigned officer workflow', async () => {
+      const incident = await Incident.create({
+        title: 'Assigned Incident',
+        description: 'Testing assignment workflow',
+        category: 'POACHING',
+        location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+        reporterId: citizenUser._id
+      });
+
+      await request(app)
+        .patch(`/api/incidents/${incident._id}/assign`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ assignedTo: officerUser._id })
+        .expect(200);
+
+      const officerIncidents = await request(app)
+        .get('/api/incidents/all')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+
+      const assignedIncident = officerIncidents.body.find(inc => inc._id === incident._id.toString());
+      expect(assignedIncident.assignedTo._id).toBe(officerUser._id.toString());
+    });
+  });
+
+  // ============================================
+  // PERFORMANCE TESTS
+  // These tests evaluate the speed, scalability, and
+  // responsiveness of the API under various loads
+  // ============================================
+  describe('Performance Tests', () => {
+    // Performance Test - Tests concurrent incident creation under load
+    it('should handle concurrent incident submissions', async () => {
+      const incidentData = {
+        title: 'Performance Test Incident',
+        description: 'Testing concurrent submissions',
+        category: 'POACHING',
+        location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' }
+      };
+
+      const startTime = Date.now();
+      const promises = Array.from({ length: 10 }, (_, i) => 
+        request(app)
+          .post('/api/incidents')
+          .set('Authorization', `Bearer ${citizenToken}`)
+          .send({
+            ...incidentData,
+            title: `${incidentData.title} ${i}`
+          })
+      );
+
+      const responses = await Promise.all(promises);
+      const endTime = Date.now();
+
+      responses.forEach(response => {
+        expect(response.status).toBe(201);
+      });
+
+      const duration = endTime - startTime;
+      console.log(`Concurrent incident submissions completed in ${duration}ms`);
+      expect(duration).toBeLessThan(5000);
+    });
+
+    // Performance Test - Tests concurrent read operations
+    it('should handle multiple concurrent GET requests efficiently', async () => {
+      for (let i = 0; i < 20; i++) {
+        await Incident.create({
+          title: `Incident ${i}`,
+          description: `Description ${i}`,
+          category: 'POACHING',
+          location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+          reporterId: citizenUser._id
+        });
+      }
+
+      const startTime = Date.now();
+      const promises = Array.from({ length: 20 }, () => 
+        request(app)
+          .get('/api/incidents/all')
+          .set('Authorization', `Bearer ${officerToken}`)
+      );
+
+      const responses = await Promise.all(promises);
+      const endTime = Date.now();
+
+      responses.forEach(response => {
+        expect(response.status).toBe(200);
+      });
+
+      const duration = endTime - startTime;
+      console.log(`Concurrent GET requests completed in ${duration}ms`);
+      expect(duration).toBeLessThan(3000);
+    });
+
+    // Performance Test - Tests average and max response times for incident creation
+    it('should maintain response time under load for incident creation', async () => {
+      const incidentData = {
+        title: 'Load Test Incident',
+        description: 'Testing load performance',
+        category: 'POACHING',
+        location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' }
+      };
+
+      const times = [];
+      for (let i = 0; i < 50; i++) {
+        const startTime = Date.now();
+        await request(app)
+          .post('/api/incidents')
+          .set('Authorization', `Bearer ${citizenToken}`)
+          .send({
+            ...incidentData,
+            title: `${incidentData.title} ${i}`
+          })
+          .expect(201);
+        const endTime = Date.now();
+        times.push(endTime - startTime);
+      }
+
+      const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
+      const maxTime = Math.max(...times);
+      
+      console.log(`Average incident creation time: ${avgTime}ms`);
+      console.log(`Max incident creation time: ${maxTime}ms`);
+      expect(avgTime).toBeLessThan(1000);
+      expect(maxTime).toBeLessThan(5000);
+    }, 60000);
+
+    // Performance Test - Tests query performance with 100 records
+    it('should handle large dataset queries efficiently', async () => {
+      for (let i = 0; i < 100; i++) {
+        await Incident.create({
+          title: `Incident ${i}`,
+          description: `Description ${i}`,
+          category: ['POACHING', 'FOREST_FIRE', 'ILLEGAL_LOGGING', 'ANIMAL_CONFLICT'][i % 4],
+          location: { lat: 12.3456 + (i * 0.0001), lng: 78.9012 + (i * 0.0001), address: `Address ${i}` },
+          reporterId: citizenUser._id,
+          status: ['SUBMITTED', 'IN_PROGRESS', 'RESOLVED'][i % 3]
+        });
+      }
+
+      const startTime = Date.now();
+      const response = await request(app)
+        .get('/api/incidents/all')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+      const endTime = Date.now();
+
+      const duration = endTime - startTime;
+      console.log(`Query with 100 incidents completed in ${duration}ms`);
+      expect(duration).toBeLessThan(1000);
+      expect(response.body).toHaveLength(100);
+    });
+
+    // Performance Test - Tests filtered query performance
+    it('should handle filtered queries efficiently', async () => {
+      for (let i = 0; i < 100; i++) {
+        await Incident.create({
+          title: `Incident ${i}`,
+          description: `Description ${i}`,
+          category: ['POACHING', 'FOREST_FIRE', 'ILLEGAL_LOGGING', 'ANIMAL_CONFLICT'][i % 4],
+          location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+          reporterId: citizenUser._id,
+          status: ['SUBMITTED', 'IN_PROGRESS', 'RESOLVED'][i % 3]
+        });
+      }
+
+      const startTime = Date.now();
+      const response = await request(app)
+        .get('/api/incidents/all?category=POACHING&status=IN_PROGRESS')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+      const endTime = Date.now();
+
+      const duration = endTime - startTime;
+      console.log(`Filtered query completed in ${duration}ms`);
+      expect(duration).toBeLessThan(500);
+      response.body.forEach(incident => {
+        expect(incident.category).toBe('POACHING');
+        expect(incident.status).toBe('IN_PROGRESS');
+      });
+    });
+
+    // Performance Test - Tests concurrent write operations (status updates)
+    it('should handle concurrent status updates', async () => {
+      const incidents = [];
+      for (let i = 0; i < 10; i++) {
+        const incident = await Incident.create({
+          title: `Incident ${i}`,
+          description: `Description ${i}`,
+          category: 'POACHING',
+          location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+          reporterId: citizenUser._id
+        });
+        incidents.push(incident);
+      }
+
+      const startTime = Date.now();
+      const promises = incidents.map(incident =>
+        request(app)
+          .patch(`/api/incidents/${incident._id}/status`)
+          .set('Authorization', `Bearer ${officerToken}`)
+          .send({ status: 'IN_PROGRESS' })
+      );
+
+      const responses = await Promise.all(promises);
+      const endTime = Date.now();
+
+      responses.forEach(response => {
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('IN_PROGRESS');
+      });
+
+      const duration = endTime - startTime;
+      console.log(`Concurrent status updates completed in ${duration}ms`);
+      expect(duration).toBeLessThan(3000);
+    });
+
+    // Performance Test - Tests concurrent write operations (assignments)
+    it('should handle concurrent incident assignments', async () => {
+      const incidents = [];
+      for (let i = 0; i < 10; i++) {
+        const incident = await Incident.create({
+          title: `Incident ${i}`,
+          description: `Description ${i}`,
+          category: 'POACHING',
+          location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+          reporterId: citizenUser._id
+        });
+        incidents.push(incident);
+      }
+
+      const startTime = Date.now();
+      const promises = incidents.map(incident =>
+        request(app)
+          .patch(`/api/incidents/${incident._id}/assign`)
+          .set('Authorization', `Bearer ${adminToken}`)
+          .send({ assignedTo: officerUser._id })
+      );
+
+      const responses = await Promise.all(promises);
+      const endTime = Date.now();
+
+      responses.forEach(response => {
+        expect(response.status).toBe(200);
+        expect(response.body.assignedTo).toBe(officerUser._id.toString());
+      });
+
+      const duration = endTime - startTime;
+      console.log(`Concurrent assignments completed in ${duration}ms`);
+      expect(duration).toBeLessThan(3000);
+    });
+
+    // Performance Test - Tests pagination performance with large dataset
+    it('should maintain performance with pagination', async () => {
+      for (let i = 0; i < 100; i++) {
+        await Incident.create({
+          title: `Incident ${i}`,
+          description: `Description ${i}`,
+          category: 'POACHING',
+          location: { lat: 12.3456, lng: 78.9012, address: 'Test Address' },
+          reporterId: citizenUser._id
+        });
+      }
+
+      const startTime = Date.now();
+      const response = await request(app)
+        .get('/api/incidents/all')
+        .set('Authorization', `Bearer ${officerToken}`)
+        .expect(200);
+      const endTime = Date.now();
+
+      const duration = endTime - startTime;
+      console.log(`Retrieved ${response.body.length} incidents in ${duration}ms`);
+      expect(duration).toBeLessThan(1000);
+      expect(response.body.length).toBe(100);
+    }, 60000);
   });
 });

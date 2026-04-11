@@ -7,7 +7,8 @@ const {
 } = require('../controllers/analyticsController');
 const {
     getPredictiveInsights,
-    getIncidentPrediction
+    getIncidentPrediction,
+    getAllIncidentsPrediction
 } = require('../controllers/predictiveAnalyticsController');
 const { authMiddleware } = require('../middleware/auth');
 
@@ -18,8 +19,9 @@ router.get('/incidents-by-category', getIncidentsByCategory);
 router.get('/incidents-by-status', getIncidentsByStatus);
 router.get('/trends', getIncidentTrends);
 
-// New predictive analytics routes
-router.get('/predictive/insights', getPredictiveInsights);
-router.get('/predictive/incident/:id', getIncidentPrediction);
+// Predictive analytics routes
+router.get('/predictive/insights', getPredictiveInsights);           // last 30 days
+router.get('/predictive/all', getAllIncidentsPrediction);         // ALL incidents ever
+router.get('/predictive/incident/:id', getIncidentPrediction);       // single incident
 
 module.exports = router;

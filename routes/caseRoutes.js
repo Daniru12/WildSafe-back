@@ -5,6 +5,21 @@ const ThreatReport = require('../models/ThreatReport');
 const User = require('../models/User');
 const Team = require('../models/Team');
 const { authMiddleware } = require('../middleware/auth');
+const { createNotification } = require('../controllers/notificationController');
+
+const getCaseAssignmentNotificationPayload = (caseDoc, assignmentNotes) => ({
+    title: `New Case Assigned: ${caseDoc.caseId}`,
+    message: `Case ${caseDoc.caseId} has been assigned to you. Threat: ${caseDoc.threatType}. Priority: ${caseDoc.priority}. Location: ${caseDoc.location?.address || 'N/A'}${assignmentNotes ? `. Notes: ${assignmentNotes}` : ''}`,
+    type: 'ASSIGNMENT',
+    priority: caseDoc.priority === 'CRITICAL' ? 'URGENT' : 'HIGH',
+    metadata: {
+        caseId: caseDoc.caseId,
+        threatType: caseDoc.threatType,
+        casePriority: caseDoc.priority,
+        location: caseDoc.location,
+        assignmentNotes: assignmentNotes || null
+    }
+});
 
 // Generate unique case ID
 const generateCaseId = () => {
@@ -142,6 +157,11 @@ router.post('/', authMiddleware, async (req, res) => {
                 sentAt: new Date()
             });
             await newCase.save();
+
+            createNotification(
+                assignedOfficer,
+                getCaseAssignmentNotificationPayload(newCase)
+            ).catch(err => console.error('Notification error (case create assign):', err));
         }
 
         // Populate response data
@@ -163,6 +183,10 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:caseId/assign', authMiddleware, async (req, res) => {
     try {
         const { officerId, teamId, assignmentNotes } = req.body;
+
+        if (!officerId && !teamId) {
+            return res.status(400).json({ message: 'Either officerId or teamId must be provided' });
+        }
         
         const case_ = await Case.findOne({ caseId: req.params.caseId });
         
@@ -190,14 +214,23 @@ router.put('/:caseId/assign', authMiddleware, async (req, res) => {
         case_.status = 'IN_PROGRESS';
         
         // Add notification
-        case_.notifications.push({
-            recipient: officerId,
-            type: 'CASE_ASSIGNED',
-            message: `Case ${case_.caseId} has been assigned to you${assignmentNotes ? ': ' + assignmentNotes : ''}`,
-            sentAt: new Date()
-        });
+        if (officerId) {
+            case_.notifications.push({
+                recipient: officerId,
+                type: 'CASE_ASSIGNED',
+                message: `Case ${case_.caseId} has been assigned to you${assignmentNotes ? ': ' + assignmentNotes : ''}`,
+                sentAt: new Date()
+            });
+        }
 
         await case_.save();
+
+        if (officerId) {
+            createNotification(
+                officerId,
+                getCaseAssignmentNotificationPayload(case_, assignmentNotes)
+            ).catch(err => console.error('Notification error (case manual assign):', err));
+        }
 
         res.json({
             message: 'Case assigned successfully',
