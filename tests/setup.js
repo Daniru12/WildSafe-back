@@ -1,6 +1,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
 
+jest.setTimeout(60000);
+
 let connected = false;
 
 beforeAll(async () => {
