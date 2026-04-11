@@ -9,7 +9,7 @@ exports.createIncident = async (req, res) => {
         const { title, description, category, location } = req.body;
         
         // Validate category
-        const validCategories = ['POACHING', 'FOREST_FIRE', 'ILLEGAL_LOGGING', 'HUMAN_WILDLIFE_CONFLICT', 'OTHER'];
+        const validCategories = ['POACHING', 'FOREST_FIRE', 'ILLEGAL_LOGGING', 'ANIMAL_CONFLICT', 'TRAPPED_INJURED_ANIMAL', 'OTHER'];
         if (!validCategories.includes(category)) {
             return res.status(400).json({ message: 'Invalid category. Must be one of: ' + validCategories.join(', ') });
         }

@@ -9,8 +9,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:integration:resource-staff": "jest tests/resourceStaff/resourceStaff.integration.test.js --runInBand",
-    "test:perf:resource-staff": "node tests/performance/resourceStaff.performance.js"
+    "test:integration": "jest --testPathPatterns=tests/notification/.*\\.integration\\.test\\.js$",
+    "test:performance": "jest --testPathPatterns=tests/notification/.*\\.performance\\.test\\.js$",
+    "test:notif-alert-awareness": "npm run test:integration && npm run test:performance"
   },
   "repository": {
     "type": "git",
