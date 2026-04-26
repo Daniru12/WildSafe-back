@@ -7,6 +7,7 @@ const RANGER_STATUS = [
     'EN_ROUTE',
     'ON_SITE',
     'ACTION_TAKEN',
+    'EVIDENCE_UPLOADED',
     'CLOSED'
 ];
 
@@ -27,10 +28,6 @@ const evidenceSchema = new mongoose.Schema({
     description: { type: String, trim: true },
     notes: { type: String, trim: true },
     conditionSummary: { type: String, trim: true },
-    gps: {
-        lat: { type: Number },
-        lng: { type: Number }
-    },
     uploadedAt: { type: Date, default: Date.now },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }); // _id enabled by default so we can delete by id

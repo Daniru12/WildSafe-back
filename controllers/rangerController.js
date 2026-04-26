@@ -406,14 +406,14 @@ const actionTaken = async (req, res) => {
 // ---------- Evidence upload ----------
 
 /**
- * POST /api/ranger/cases/:caseId/evidence - Upload evidence (photos, notes, condition, GPS). Requires ON_SITE or later.
- * Multipart: files (photos), body: description, notes, conditionSummary, gpsLat, gpsLng (or JSON gps)
+ * POST /api/ranger/cases/:caseId/evidence - Upload evidence (photos, notes, condition). Requires ON_SITE or later.
+ * Multipart: files (photos), body: description, notes, conditionSummary
  */
 const addEvidence = async (req, res) => {
     try {
         const { caseId } = req.params;
         const userId = req.user.id;
-        const { description, notes, conditionSummary, gpsLat, gpsLng } = req.body || {};
+        const { description, notes, conditionSummary } = req.body || {};
 
         const caseDoc = await Case.findOne({ caseId });
         if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
@@ -432,22 +432,25 @@ const addEvidence = async (req, res) => {
         }
 
         const files = req.files || [];
-        // Optional pin; multer often leaves coords in body even when photos are uploaded.
-        const gps =
-            gpsLat != null && gpsLng != null
-                ? { lat: Number(gpsLat), lng: Number(gpsLng) }
-                : undefined;
 
         const evidenceItems = [];
         for (const f of files) {
-            const url = f.filename ? `/uploads/ranger/${f.filename}` : (f.path || f.location || f.url || '');
+            // Cloudinary sets f.path to the full URL (https://...); disk storage sets f.filename
+            // Check if f.path is a full URL (Cloudinary) first, otherwise use local disk path
+            let url;
+            if (f.path && /^https?:\/\//i.test(f.path)) {
+                url = f.path; // Cloudinary URL
+            } else if (f.filename) {
+                url = `/uploads/ranger/${f.filename}`; // Local disk storage
+            } else {
+                url = f.path || f.location || f.url || `/uploads/ranger/${Date.now()}`;
+            }
             evidenceItems.push({
-                url: url || `/uploads/ranger/${Date.now()}`,
+                url,
                 evidenceType: (f.mimetype || '').startsWith('video/') ? 'VIDEO' : 'PHOTO',
                 description: description || '',
                 notes: notes || '',
                 conditionSummary: conditionSummary || '',
-                gps,
                 uploadedAt: new Date(),
                 uploadedBy: userId
             });
@@ -460,7 +463,6 @@ const addEvidence = async (req, res) => {
                 description: description || '',
                 notes: notes || '',
                 conditionSummary: conditionSummary || '',
-                gps,
                 uploadedAt: new Date(),
                 uploadedBy: userId
             });
@@ -470,15 +472,32 @@ const addEvidence = async (req, res) => {
             return res.status(400).json({ message: 'Provide at least one photo or description/notes' });
         }
 
+        // Update mission with evidence and add to status history
         await RangerMission.findOneAndUpdate(
             { caseId, assignedTo: userId },
-            { $push: { evidence: { $each: evidenceItems } }, $set: { updatedAt: new Date() } }
+            {
+                $push: {
+                    evidence: { $each: evidenceItems },
+                    rangerStatusHistory: {
+                        status: 'EVIDENCE_UPLOADED',
+                        changedAt: new Date(),
+                        changedBy: userId,
+                        notes: `Uploaded ${evidenceItems.length} evidence item(s)`
+                    }
+                },
+                $set: { updatedAt: new Date() }
+            }
         );
 
         const updated = await RangerMission.findOne({ caseId, assignedTo: userId })
-            .select('evidence')
+            .select('evidence rangerStatusHistory')
             .lean();
-        res.json({ message: 'Evidence added', caseId, evidence: updated.evidence });
+        res.json({
+            message: 'Evidence added',
+            caseId,
+            evidence: updated.evidence,
+            rangerStatusHistory: updated.rangerStatusHistory
+        });
     } catch (error) {
         console.error('Error adding evidence:', error);
         res.status(500).json({ message: 'Error adding evidence', error: error.message });
