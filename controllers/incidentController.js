@@ -256,6 +256,38 @@ exports.deleteIncident = async (req, res) => {
     }
 };
 
+// @desc    Delete user's own incident
+// @route   DELETE /api/incidents/:id/mine
+// @access  Private (Citizen - reporter only)
+exports.deleteMyIncident = async (req, res) => {
+    try {
+        const incident = await Incident.findById(req.params.id);
+
+        if (!incident) {
+            return res.status(404).json({ message: 'Incident not found' });
+        }
+
+        // Check if user is the reporter
+        if (incident.reporterId.toString() !== req.user.id) {
+            return res.status(403).json({ message: 'Access denied. You can only delete your own incidents.' });
+        }
+
+        // Only allow deletion if status is SUBMITTED (not under review or in progress)
+        if (incident.status !== 'SUBMITTED') {
+            return res.status(400).json({ 
+                message: 'Cannot delete incident that is already under review or being processed.' 
+            });
+        }
+
+        await Incident.findByIdAndDelete(req.params.id);
+
+        res.json({ message: 'Incident deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting incident:', err);
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
 module.exports = {
     createIncident: exports.createIncident,
     getMyIncidents: exports.getMyIncidents,
@@ -263,5 +295,6 @@ module.exports = {
     getAllIncidents: exports.getAllIncidents,
     updateStatus: exports.updateStatus,
     assignIncident: exports.assignIncident,
-    deleteIncident: exports.deleteIncident
+    deleteIncident: exports.deleteIncident,
+    deleteMyIncident: exports.deleteMyIncident
 };

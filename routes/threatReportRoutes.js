@@ -344,11 +344,60 @@ router.get('/stats/overview', authMiddleware, roleMiddleware(['OFFICER', 'ADMIN'
     }
 });
 
+// DELETE /api/threat-reports/:reportId/mine - Delete user's own threat report
+router.delete('/:reportId/mine', authMiddleware, async (req, res) => {
+    try {
+        let report;
+
+        // Try to find by MongoDB _id first
+        if (req.params.reportId.match(/^[0-9a-fA-F]{24}$/)) {
+            report = await ThreatReport.findById(req.params.reportId);
+        } else {
+            report = await ThreatReport.findOne({ reportId: req.params.reportId });
+        }
+
+        if (!report) {
+            return res.status(404).json({ message: 'Threat report not found' });
+        }
+
+        // Check if user is the reporter
+        if (report.reporterInfo.email !== req.user.email) {
+            return res.status(403).json({ message: 'Access denied. You can only delete your own reports.' });
+        }
+
+        // Only allow deletion if status is PENDING (not validated or rejected)
+        if (report.status !== 'PENDING') {
+            return res.status(400).json({
+                message: 'Cannot delete report that has already been reviewed.'
+            });
+        }
+
+        // Check if there are any cases associated with this threat report
+        const associatedCase = await Case.findOne({ threatReportId: report._id });
+        if (associatedCase) {
+            return res.status(400).json({
+                message: 'Cannot delete threat report. It is associated with an active case.'
+            });
+        }
+
+        if (req.params.reportId.match(/^[0-9a-fA-F]{24}$/)) {
+            await ThreatReport.findByIdAndDelete(req.params.reportId);
+        } else {
+            await ThreatReport.findOneAndDelete({ reportId: req.params.reportId });
+        }
+
+        res.json({ message: 'Threat report deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting threat report:', error);
+        res.status(500).json({ message: 'Error deleting threat report', error: error.message });
+    }
+});
+
 // DELETE /api/threat-reports/:reportId - Delete threat report (admin only)
 router.delete('/:reportId', authMiddleware, roleMiddleware(['ADMIN']), async (req, res) => {
     try {
         const report = await ThreatReport.findOne({ reportId: req.params.reportId });
-        
+
         if (!report) {
             return res.status(404).json({ message: 'Threat report not found' });
         }
@@ -356,8 +405,8 @@ router.delete('/:reportId', authMiddleware, roleMiddleware(['ADMIN']), async (re
         // Check if there are any cases associated with this threat report
         const associatedCase = await Case.findOne({ threatReportId: report._id });
         if (associatedCase) {
-            return res.status(400).json({ 
-                message: 'Cannot delete threat report. It is associated with an active case.' 
+            return res.status(400).json({
+                message: 'Cannot delete threat report. It is associated with an active case.'
             });
         }
 
