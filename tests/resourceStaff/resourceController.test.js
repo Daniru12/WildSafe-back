@@ -158,24 +158,33 @@ describe('assignResource', () => {
         const saveMock = jest.fn().mockResolvedValue(undefined);
         const resource = { _id: 'r1', assignedTo: null, status: 'AVAILABLE', save: saveMock };
         const staff = { _id: 's1' };
+        const populatedResource = {
+            _id: 'r1',
+            assignedTo: { _id: 's1', userId: { _id: 'u1', name: 'Officer One' } },
+            status: 'ASSIGNED'
+        };
 
-        Resource.findById.mockResolvedValue(resource);
+        Resource.findById
+            .mockResolvedValueOnce(resource)
+            .mockReturnValueOnce({ populate: jest.fn().mockResolvedValue(populatedResource) });
         Staff.findById.mockResolvedValue(staff);
 
         const req = mockReq({ staffId: 's1' }, { id: 'r1' });
+        req.user = { role: 'ADMIN', _id: 'u-admin' };
         const res = mockRes();
         await assignResource(req, res);
 
         expect(resource.assignedTo).toBe('s1');
         expect(resource.status).toBe('ASSIGNED');
         expect(saveMock).toHaveBeenCalled();
-        expect(res.json).toHaveBeenCalledWith(resource);
+        expect(res.json).toHaveBeenCalledWith(populatedResource);
     });
 
     test('404 – resource not found', async () => {
         Resource.findById.mockResolvedValue(null);
 
         const req = mockReq({ staffId: 's1' }, { id: 'bad-id' });
+        req.user = { role: 'ADMIN', _id: 'u-admin' };
         const res = mockRes();
         await assignResource(req, res);
 
@@ -184,10 +193,11 @@ describe('assignResource', () => {
     });
 
     test('404 – staff not found', async () => {
-        Resource.findById.mockResolvedValue({ _id: 'r1', save: jest.fn() });
+        Resource.findById.mockResolvedValue({ _id: 'r1', status: 'AVAILABLE', save: jest.fn() });
         Staff.findById.mockResolvedValue(null);
 
         const req = mockReq({ staffId: 'bad-staff' }, { id: 'r1' });
+        req.user = { role: 'ADMIN', _id: 'u-admin' };
         const res = mockRes();
         await assignResource(req, res);
 
@@ -199,6 +209,7 @@ describe('assignResource', () => {
         Resource.findById.mockRejectedValue(new Error('DB error'));
 
         const req = mockReq({ staffId: 's1' }, { id: 'r1' });
+        req.user = { role: 'ADMIN', _id: 'u-admin' };
         const res = mockRes();
         await assignResource(req, res);
 

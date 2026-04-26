@@ -1,3 +1,7 @@
+/**
+ * Ranger (field officer) API — everything here assumes the user is the assigned officer on the case.
+ * Case assignment lives on Case.assignedOfficer; mission workflow + evidence live on RangerMission (one per case).
+ */
 const mongoose = require('mongoose');
 const Case = require('../models/Case');
 const ThreatReport = require('../models/ThreatReport');
@@ -18,6 +22,7 @@ const getMyAssignedCases = async (req, res) => {
         const caseFilter = { assignedOfficer: userId };
 
         let caseIds;
+        // When filtering by mission state, paginate missions first — Case doesn't know rangerStatus.
         if (rangerStatus) {
             const missions = await RangerMission.find({
                 assignedTo: userId,
@@ -42,6 +47,7 @@ const getMyAssignedCases = async (req, res) => {
         )
             .populate('threatReportId', 'description media reportId')
             .sort({ createdAt: -1 })
+            // Filtered path: skip is already applied via missions; keep order aligned with caseIds.
             .limit(caseIds ? caseIds.length : limitNum)
             .skip(caseIds ? 0 : skip)
             .lean();
@@ -55,6 +61,7 @@ const getMyAssignedCases = async (req, res) => {
             if (!c) continue;
 
             let mission = await RangerMission.findOne({ caseId: c.caseId });
+            // Older cases may exist before we added missions — backfill so the app always has a row to track status.
             if (!mission) {
                 mission = await RangerMission.create({
                     caseId: c.caseId,
@@ -198,6 +205,7 @@ const declineMission = async (req, res) => {
             }
         );
 
+        // Clear assignment so dispatch can hand the case to someone else — mission stays DECLINED for audit.
         caseDoc.assignedOfficer = undefined;
         await caseDoc.save();
 
@@ -398,14 +406,14 @@ const actionTaken = async (req, res) => {
 // ---------- Evidence upload ----------
 
 /**
- * POST /api/ranger/cases/:caseId/evidence - Upload evidence (photos, notes, condition, GPS). Requires ON_SITE or later.
- * Multipart: files (photos), body: description, notes, conditionSummary, gpsLat, gpsLng (or JSON gps)
+ * POST /api/ranger/cases/:caseId/evidence - Upload evidence (photos, notes, condition). Requires ON_SITE or later.
+ * Multipart: files (photos), body: description, notes, conditionSummary
  */
 const addEvidence = async (req, res) => {
     try {
         const { caseId } = req.params;
         const userId = req.user.id;
-        const { description, notes, conditionSummary, gpsLat, gpsLng } = req.body || {};
+        const { description, notes, conditionSummary } = req.body || {};
 
         const caseDoc = await Case.findOne({ caseId });
         if (!caseDoc || caseDoc.assignedOfficer?.toString() !== userId) {
@@ -424,25 +432,30 @@ const addEvidence = async (req, res) => {
         }
 
         const files = req.files || [];
-        const gps =
-            gpsLat != null && gpsLng != null
-                ? { lat: Number(gpsLat), lng: Number(gpsLng) }
-                : undefined;
 
         const evidenceItems = [];
         for (const f of files) {
-            const url = f.filename ? `/uploads/ranger/${f.filename}` : (f.path || f.location || f.url || '');
+            // Cloudinary sets f.path to the full URL (https://...); disk storage sets f.filename
+            // Check if f.path is a full URL (Cloudinary) first, otherwise use local disk path
+            let url;
+            if (f.path && /^https?:\/\//i.test(f.path)) {
+                url = f.path; // Cloudinary URL
+            } else if (f.filename) {
+                url = `/uploads/ranger/${f.filename}`; // Local disk storage
+            } else {
+                url = f.path || f.location || f.url || `/uploads/ranger/${Date.now()}`;
+            }
             evidenceItems.push({
-                url: url || `/uploads/ranger/${Date.now()}`,
+                url,
                 evidenceType: (f.mimetype || '').startsWith('video/') ? 'VIDEO' : 'PHOTO',
                 description: description || '',
                 notes: notes || '',
                 conditionSummary: conditionSummary || '',
-                gps,
                 uploadedAt: new Date(),
                 uploadedBy: userId
             });
         }
+        // No files but they typed something — still worth capturing as a structured REPORT row.
         if (evidenceItems.length === 0 && (description || notes || conditionSummary)) {
             evidenceItems.push({
                 url: 'text-report',
@@ -450,7 +463,6 @@ const addEvidence = async (req, res) => {
                 description: description || '',
                 notes: notes || '',
                 conditionSummary: conditionSummary || '',
-                gps,
                 uploadedAt: new Date(),
                 uploadedBy: userId
             });
@@ -460,15 +472,32 @@ const addEvidence = async (req, res) => {
             return res.status(400).json({ message: 'Provide at least one photo or description/notes' });
         }
 
+        // Update mission with evidence and add to status history
         await RangerMission.findOneAndUpdate(
             { caseId, assignedTo: userId },
-            { $push: { evidence: { $each: evidenceItems } }, $set: { updatedAt: new Date() } }
+            {
+                $push: {
+                    evidence: { $each: evidenceItems },
+                    rangerStatusHistory: {
+                        status: 'EVIDENCE_UPLOADED',
+                        changedAt: new Date(),
+                        changedBy: userId,
+                        notes: `Uploaded ${evidenceItems.length} evidence item(s)`
+                    }
+                },
+                $set: { updatedAt: new Date() }
+            }
         );
 
         const updated = await RangerMission.findOne({ caseId, assignedTo: userId })
-            .select('evidence')
+            .select('evidence rangerStatusHistory')
             .lean();
-        res.json({ message: 'Evidence added', caseId, evidence: updated.evidence });
+        res.json({
+            message: 'Evidence added',
+            caseId,
+            evidence: updated.evidence,
+            rangerStatusHistory: updated.rangerStatusHistory
+        });
     } catch (error) {
         console.error('Error adding evidence:', error);
         res.status(500).json({ message: 'Error adding evidence', error: error.message });
@@ -582,6 +611,7 @@ const closeCase = async (req, res) => {
             }
         );
 
+        // Mirror the outcome onto Case so the case-management side sees RESOLVED without calling ranger APIs.
         caseDoc.resolution = {
             actionSummary: actionTaken,
             outcome: solutionProvided,

@@ -2,7 +2,24 @@ const express = require('express');
 const router = express.Router();
 const ThreatReport = require('../models/ThreatReport');
 const Case = require('../models/Case');
+const User = require('../models/User');
+const { notifyByRole, createNotification } = require('../controllers/notificationController');
 const { authMiddleware, roleMiddleware } = require('../middleware/auth');
+
+const mapThreatUrgencyToPriority = (urgencyLevel) => {
+    switch (urgencyLevel) {
+        case 'CRITICAL':
+            return 'URGENT';
+        case 'HIGH':
+            return 'HIGH';
+        case 'LOW':
+            return 'LOW';
+        default:
+            return 'MEDIUM';
+    }
+};
+
+const formatThreatStatus = (status) => String(status || '').replace(/_/g, ' ');
 
 // Generate unique report ID
 const generateReportId = () => {
@@ -77,6 +94,25 @@ router.post('/', async (req, res) => {
         });
 
         await threatReport.save();
+
+        try {
+            await notifyByRole(['ADMIN'], {
+                title: 'New Threat Report Submitted',
+                message: `New threat report has arrived (${threatReport.reportId}) for ${threatReport.threatType.replace(/_/g, ' ')}.`,
+                type: 'SYSTEM',
+                priority: mapThreatUrgencyToPriority(threatReport.urgencyLevel),
+                metadata: {
+                    source: 'THREAT_REPORT',
+                    reportId: threatReport.reportId,
+                    threatType: threatReport.threatType,
+                    location: threatReport.location,
+                    submittedAt: threatReport.createdAt,
+                    reporterName: threatReport.reporterInfo?.name || 'Unknown'
+                }
+            });
+        } catch (notificationError) {
+            console.error('Threat report saved but admin notification failed:', notificationError);
+        }
 
         res.status(201).json({
             message: 'Threat report submitted successfully',
@@ -183,9 +219,17 @@ router.put('/:reportId/validate', authMiddleware, roleMiddleware(['OFFICER', 'AD
             return res.status(400).json({ message: 'Invalid status. Must be VALIDATED or REJECTED' });
         }
 
+        const existingReport = await ThreatReport.findOne({ reportId: req.params.reportId });
+
+        if (!existingReport) {
+            return res.status(404).json({ message: 'Threat report not found' });
+        }
+
+        const previousStatus = existingReport.status;
+
         const report = await ThreatReport.findOneAndUpdate(
             { reportId: req.params.reportId },
-            { 
+            {
                 status,
                 validationNotes,
                 updatedAt: Date.now()
@@ -193,8 +237,35 @@ router.put('/:reportId/validate', authMiddleware, roleMiddleware(['OFFICER', 'AD
             { new: true }
         );
 
-        if (!report) {
-            return res.status(404).json({ message: 'Threat report not found' });
+        const statusChanged = previousStatus !== status;
+
+        if (statusChanged) {
+            try {
+                const reporterEmail = report?.reporterInfo?.email;
+                if (reporterEmail) {
+                    const reporterUser = await User.findOne({ email: reporterEmail, status: 'ACTIVE' }).select('_id');
+                    if (reporterUser?._id) {
+                        await createNotification(reporterUser._id, {
+                            title: 'Threat Report Status Updated',
+                            message: `Your threat report ${report.reportId} is now ${formatThreatStatus(status)}.`,
+                            type: 'SYSTEM',
+                            priority: status === 'REJECTED' ? 'HIGH' : 'MEDIUM',
+                            metadata: {
+                                source: 'THREAT_REPORT_STATUS',
+                                reportId: report.reportId,
+                                threatType: report.threatType,
+                                previousStatus,
+                                currentStatus: status,
+                                updatedByRole: req.user.role,
+                                updatedAt: new Date().toISOString(),
+                                validationNotes: validationNotes || ''
+                            }
+                        });
+                    }
+                }
+            } catch (notifyError) {
+                console.error('Threat status updated but reporter notification failed:', notifyError);
+            }
         }
 
         // If validated, create a case
@@ -206,17 +277,20 @@ router.put('/:reportId/validate', authMiddleware, roleMiddleware(['OFFICER', 'AD
                 return `CS-${timestamp}-${random}`.toUpperCase();
             };
 
-            const newCase = new Case({
-                caseId: generateCaseId(),
-                threatReportId: report._id,
-                threatType: report.threatType,
-                location: report.location,
-                reporterInfo: report.reporterInfo,
-                dateTime: report.dateTime,
-                priority: report.urgencyLevel
-            });
+            const existingCase = await Case.findOne({ threatReportId: report._id }).select('_id');
+            if (!existingCase) {
+                const newCase = new Case({
+                    caseId: generateCaseId(),
+                    threatReportId: report._id,
+                    threatType: report.threatType,
+                    location: report.location,
+                    reporterInfo: report.reporterInfo,
+                    dateTime: report.dateTime,
+                    priority: report.urgencyLevel
+                });
 
-            await newCase.save();
+                await newCase.save();
+            }
         }
 
         res.json({

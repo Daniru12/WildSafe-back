@@ -1,18 +1,29 @@
+/**
+ * Ranger integration tests — HTTP API, suggested steps (mocked Groq), RangerMission model.
+ * Uses tests/setupRanger.js (ranger Jest project). Requires MongoDB for HTTP + model suites.
+ *
+ * Groq HTTP client tests: tests/ranger/groq.test.js (axios spied, not module-mocked).
+ */
 
-// Dummy API keys so app loads without real OpenAI/Cohere (analytics routes load these)
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'sk-test-dummy';
 process.env.COHERE_API_KEY = process.env.COHERE_API_KEY || 'test-cohere-dummy';
+
+jest.mock('../../integrations/ai/groq', () => ({
+  groqChat: jest.fn()
+}));
 
 const request = require('supertest');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const app = require('../app');
-const User = require('../models/User');
-const Case = require('../models/Case');
-const ThreatReport = require('../models/ThreatReport');
-const RangerMission = require('../models/RangerMission');
+const app = require('../../app');
+const User = require('../../models/User');
+const Case = require('../../models/Case');
+const ThreatReport = require('../../models/ThreatReport');
+const RangerMission = require('../../models/RangerMission');
+const { getSuggestedRangerSteps, FALLBACK_STEPS } = require('../../controllers/suggestRangerStepsController');
+const { groqChat } = require('../../integrations/ai/groq');
 
-// --- Helpers: generate unique IDs for test data ---
+// --- Shared helpers (HTTP suite) ---
 const generateCaseId = () => {
   const t = Date.now().toString(36);
   const r = Math.random().toString(36).substr(2, 5);
@@ -25,11 +36,6 @@ const generateReportId = () => {
   return `TR-${t}-${r}`.toUpperCase();
 };
 
-/**
- * Creates a Case + ThreatReport assigned to the given officer.
- * Optionally creates a RangerMission in the given rangerStatus (e.g. 'ASSIGNED', 'ON_SITE').
- * Uses insertMany to avoid Case pre('save') issues in tests. Returns the caseId.
- */
 async function createCaseForOfficer(officerId, rangerStatus = null) {
   const [report] = await ThreatReport.insertMany([{
     reportId: generateReportId(),
@@ -61,12 +67,13 @@ async function createCaseForOfficer(officerId, rangerStatus = null) {
   return caseId;
 }
 
-// ========== Test suite: Ranger API ==========
-describe('Ranger API Tests', () => {
-  let officerToken, citizenToken, adminToken;
+// =============================================================================
+// HTTP — /api/ranger (supertest)
+// =============================================================================
+describe('Ranger integration — HTTP API', () => {
+  let officerToken, citizenToken;
   let officerUser, citizenUser;
 
-  // Connect to MongoDB and create test users (OFFICER, CITIZEN, ADMIN) with JWT tokens
   beforeAll(async () => {
     jest.setTimeout(20000);
     if (mongoose.connection.readyState !== 1) {
@@ -98,7 +105,7 @@ describe('Ranger API Tests', () => {
       password: 'password123',
       role: 'CITIZEN'
     });
-    const adminUser = await User.create({
+    await User.create({
       name: 'Ranger Admin',
       email: 'admin-ranger@test.com',
       password: 'password123',
@@ -107,10 +114,8 @@ describe('Ranger API Tests', () => {
 
     officerToken = jwt.sign({ id: officerUser._id.toString() }, process.env.JWT_SECRET || 'test_secret');
     citizenToken = jwt.sign({ id: citizenUser._id.toString() }, process.env.JWT_SECRET || 'test_secret');
-    adminToken = jwt.sign({ id: adminUser._id.toString() }, process.env.JWT_SECRET || 'test_secret');
   });
 
-  // ---------- GET /api/ranger (ranger dashboard / health) ----------
   describe('GET /api/ranger', () => {
     it('should return 401 without token', async () => {
       await request(app).get('/api/ranger').expect(401);
@@ -134,7 +139,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- GET /api/ranger/cases (list assigned cases with pagination) ----------
   describe('GET /api/ranger/cases', () => {
     it('should return 401 without token', async () => {
       await request(app).get('/api/ranger/cases').expect(401);
@@ -153,7 +157,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- GET /api/ranger/cases/:caseId (single case detail for ranger) ----------
   describe('GET /api/ranger/cases/:caseId', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
@@ -197,7 +200,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- GET /api/ranger/cases/:caseId/suggested-actions (AI or fallback steps) ----------
   describe('GET /api/ranger/cases/:caseId/suggested-actions', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
@@ -253,7 +255,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/accept (officer accepts mission) ----------
   describe('POST /api/ranger/cases/:caseId/accept', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
@@ -287,7 +288,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/start-mission (set status EN_ROUTE) ----------
   describe('POST /api/ranger/cases/:caseId/start-mission', () => {
     it('should return 200 and set EN_ROUTE', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ACCEPTED');
@@ -299,7 +299,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/arrive-on-site (set status ON_SITE) ----------
   describe('POST /api/ranger/cases/:caseId/arrive-on-site', () => {
     it('should return 200 and set ON_SITE', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ACCEPTED');
@@ -316,7 +315,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/action-taken (set status ACTION_TAKEN) ----------
   describe('POST /api/ranger/cases/:caseId/action-taken', () => {
     it('should return 200 and set ACTION_TAKEN', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ACCEPTED');
@@ -336,7 +334,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/evidence (add evidence to mission) ----------
   describe('POST /api/ranger/cases/:caseId/evidence', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ON_SITE');
@@ -359,7 +356,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- DELETE /api/ranger/cases/:caseId/evidence/:evidenceId (remove one evidence) ----------
   describe('DELETE /api/ranger/cases/:caseId/evidence/:evidenceId', () => {
     it('should return 400 for invalid evidence id', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ON_SITE');
@@ -397,7 +393,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/close (close case, set RESOLVED, write resolution) ----------
   describe('POST /api/ranger/cases/:caseId/close', () => {
     it('should return 401 without token', async () => {
       const caseId = await createCaseForOfficer(officerUser._id, 'ON_SITE');
@@ -452,7 +447,6 @@ describe('Ranger API Tests', () => {
     });
   });
 
-  // ---------- POST /api/ranger/cases/:caseId/decline (decline mission, unassign case) ----------
   describe('POST /api/ranger/cases/:caseId/decline', () => {
     it('should decline and unassign case', async () => {
       const declineCaseId = await createCaseForOfficer(officerUser._id, 'ASSIGNED');
@@ -465,5 +459,94 @@ describe('Ranger API Tests', () => {
       const caseDoc = await Case.findOne({ caseId: declineCaseId });
       expect(caseDoc.assignedOfficer).toBeUndefined();
     });
+  });
+});
+
+// =============================================================================
+// suggestRangerStepsController (Groq mocked at file top)
+// =============================================================================
+describe('Ranger integration — suggestRangerStepsController', () => {
+  beforeEach(() => {
+    groqChat.mockReset();
+  });
+
+  it('returns parsed non-empty lines when Groq returns plain text', async () => {
+    groqChat.mockResolvedValueOnce(
+      'Secure the perimeter\n- Photograph evidence\n* Note GPS\n• Call supervisor'
+    );
+    const steps = await getSuggestedRangerSteps('POACHING', 'Trail near river');
+    expect(groqChat).toHaveBeenCalled();
+    expect(steps).toEqual([
+      'Secure the perimeter',
+      'Photograph evidence',
+      'Note GPS',
+      'Call supervisor'
+    ]);
+  });
+
+  it('uses rule-based fallback when Groq returns null', async () => {
+    groqChat.mockResolvedValueOnce(null);
+    const steps = await getSuggestedRangerSteps('FOREST_FIRE', 'Smoke visible');
+    expect(steps).toEqual(FALLBACK_STEPS.FOREST_FIRE);
+  });
+
+  it('uses OTHER fallback for unknown threat type when AI empty', async () => {
+    groqChat.mockResolvedValueOnce('');
+    const steps = await getSuggestedRangerSteps('UNKNOWN_TYPE_XYZ', '');
+    expect(steps).toEqual(FALLBACK_STEPS.OTHER);
+  });
+
+  it('trims description sent to AI to 500 chars', async () => {
+    groqChat.mockResolvedValueOnce('one line only');
+    const long = 'x'.repeat(600);
+    await getSuggestedRangerSteps('OTHER', long);
+    const userMsg = groqChat.mock.calls[0][0].find((m) => m.role === 'user');
+    expect(userMsg.content).toContain('x'.repeat(500));
+    expect(userMsg.content.length).toBeLessThan(long.length + 400);
+  });
+
+  it('many suggestions without network stay fast', async () => {
+    groqChat.mockResolvedValue('a\nb\nc\nd\ne');
+    const t0 = Date.now();
+    for (let i = 0; i < 80; i++) {
+      await getSuggestedRangerSteps('ILLEGAL_LOGGING', 'bench');
+    }
+    const ms = Date.now() - t0;
+    expect(ms).toBeLessThan(500);
+  });
+});
+
+// =============================================================================
+// RangerMission model
+// =============================================================================
+describe('Ranger integration — RangerMission model', () => {
+  let officerId;
+
+  beforeAll(async () => {
+    if (mongoose.connection.readyState !== 1) {
+      const uri = process.env.MONGODB_TEST_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/wildsafe_test';
+      await mongoose.connect(uri, { serverSelectionTimeoutMS: 8000 });
+    }
+    officerId = new mongoose.Types.ObjectId();
+  });
+
+  it('rejects a second mission with the same caseId (unique index)', async () => {
+    const caseId = `CS-UNIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    await RangerMission.create({
+      caseId,
+      assignedTo: officerId,
+      rangerStatus: 'ASSIGNED',
+      rangerStatusHistory: [{ status: 'ASSIGNED', changedAt: new Date() }]
+    });
+    await expect(
+      RangerMission.create({
+        caseId,
+        assignedTo: officerId,
+        rangerStatus: 'ASSIGNED',
+        rangerStatusHistory: [{ status: 'ASSIGNED', changedAt: new Date() }]
+      })
+    ).rejects.toMatchObject({ code: 11000 });
+
+    await RangerMission.deleteMany({ caseId });
   });
 });

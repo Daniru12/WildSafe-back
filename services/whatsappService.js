@@ -3,6 +3,20 @@ const axios = require('axios');
 const INSTANCE_ID = process.env.ULTRAMSG_INSTANCE_ID;
 const TOKEN = process.env.ULTRAMSG_TOKEN;
 
+function normalizePhoneForUltraMsg(rawPhone) {
+    if (!rawPhone || typeof rawPhone !== 'string') return null;
+
+    // Keep digits only. UltraMsg commonly expects numeric international format.
+    const digits = rawPhone.replace(/\D/g, '');
+
+    // Basic sanity check for international numbers.
+    if (digits.length < 10 || digits.length > 15) {
+        return null;
+    }
+
+    return digits;
+}
+
 /**
  * Send a single WhatsApp text message via UltraMsg API.
  * @param {string} phone - International format e.g. "+94771234567"
@@ -16,11 +30,17 @@ async function sendWhatsAppMessage(phone, message) {
             return null;
         }
 
+        const normalizedPhone = normalizePhoneForUltraMsg(phone);
+        if (!normalizedPhone) {
+            console.warn(`[WhatsApp] Invalid phone format for recipient: ${phone}`);
+            return null;
+        }
+
         const response = await axios.post(
             `https://api.ultramsg.com/${INSTANCE_ID}/messages/chat`,
             new URLSearchParams({
                 token: TOKEN,
-                to: phone,
+                to: normalizedPhone,
                 body: message,
                 priority: 10       // 1–10: higher = sent first in queue
             }).toString(),
@@ -45,9 +65,10 @@ async function sendWhatsAppMessage(phone, message) {
  * @param {string} alertTitle   - Title of the alert
  * @param {string} alertMessage - Body message
  * @param {string} category     - 'EMERGENCY' | 'WARNING' | 'INFO' | 'ANNOUNCEMENT'
+ * @param {Array}  awarenessItems - Optional awareness guidelines attached to this alert
  * @returns {{ sent: number, failed: number, total: number }}
  */
-async function sendBulkWhatsAppAlerts(users, alertTitle, alertMessage, category) {
+async function sendBulkWhatsAppAlerts(users, alertTitle, alertMessage, category, awarenessItems = []) {
     // Choose an appropriate emoji based on category
     const emojiMap = {
         EMERGENCY: '🚨',
@@ -57,40 +78,78 @@ async function sendBulkWhatsAppAlerts(users, alertTitle, alertMessage, category)
     };
     const emoji = emojiMap[category] || '🔔';
 
+    const awarenessSummary = Array.isArray(awarenessItems)
+        ? awarenessItems
+            .slice(0, 2)
+            .map((item, index) => {
+                const title = item?.title || `Guideline ${index + 1}`;
+                const content = (item?.content || '').replace(/\s+/g, ' ').trim();
+                const shortContent = content.length > 140 ? `${content.substring(0, 140)}...` : content;
+                return `${index + 1}. ${title}${shortContent ? ` - ${shortContent}` : ''}`;
+            })
+            .join('\n')
+        : '';
+
     const formattedMessage =
         `${emoji} *WildSafe Alert* ${emoji}\n\n` +
         `*${alertTitle}*\n\n` +
         `${alertMessage}\n\n` +
+        `${awarenessSummary ? `*Related Awareness Guidelines:*\n${awarenessSummary}\n\n` : ''}` +
         `_This is an automated safety alert from WildSafe. Please follow official guidelines._`;
 
-    // Only send to users who registered a phone number
-    const usersWithPhone = users.filter(u => u.phone && u.phone.trim() !== '');
+    // Normalize and validate phone numbers before attempting to send.
+    const recipientsPrepared = users.map((u) => {
+        const normalized = normalizePhoneForUltraMsg(u.phone || '');
+        return {
+            user: u,
+            normalizedPhone: normalized,
+            valid: !!normalized
+        };
+    });
+
+    const usersWithPhone = recipientsPrepared.filter((r) => r.valid);
+    const invalidRecipients = recipientsPrepared
+        .filter((r) => !r.valid)
+        .map((r) => ({
+            name: r.user.name || 'Unknown',
+            phone: r.user.phone || '',
+            status: 'failed',
+            reason: 'invalid_phone_format'
+        }));
 
     if (usersWithPhone.length === 0) {
         console.log('[WhatsApp] No users with phone numbers found — skipping WhatsApp dispatch');
-        return { sent: 0, failed: 0, total: 0 };
+        return {
+            sent: 0,
+            failed: invalidRecipients.length,
+            total: invalidRecipients.length,
+            recipients: invalidRecipients
+        };
     }
 
     console.log(`[WhatsApp] Dispatching to ${usersWithPhone.length} / ${users.length} users`);
 
     // Fire all messages in parallel; allSettled ensures one failure won't block others
     const results = await Promise.allSettled(
-        usersWithPhone.map(u => sendWhatsAppMessage(u.phone, formattedMessage))
+        usersWithPhone.map(r => sendWhatsAppMessage(r.normalizedPhone, formattedMessage))
     );
 
     // Build per-recipient status for API response visibility
-    const recipients = usersWithPhone.map((u, i) => ({
-        name: u.name || 'Unknown',
-        phone: u.phone,
-        status: (results[i].status === 'fulfilled' && results[i].value !== null) ? 'sent' : 'failed'
+    const recipients = usersWithPhone.map((r, i) => ({
+        name: r.user.name || 'Unknown',
+        phone: r.normalizedPhone,
+        status: (results[i].status === 'fulfilled' && results[i].value !== null) ? 'sent' : 'failed',
+        reason: (results[i].status === 'fulfilled' && results[i].value !== null) ? 'sent' : 'ultramsg_send_failed'
     }));
 
-    const succeeded = recipients.filter(r => r.status === 'sent').length;
-    const failed = recipients.length - succeeded;
+    const allRecipients = [...recipients, ...invalidRecipients];
 
-    console.log(`[WhatsApp] ✅ ${succeeded} sent  ❌ ${failed} failed  (total: ${usersWithPhone.length})`);
+    const succeeded = allRecipients.filter(r => r.status === 'sent').length;
+    const failed = allRecipients.length - succeeded;
 
-    return { sent: succeeded, failed, total: usersWithPhone.length, recipients };
+    console.log(`[WhatsApp] ✅ ${succeeded} sent  ❌ ${failed} failed  (total: ${allRecipients.length})`);
+
+    return { sent: succeeded, failed, total: allRecipients.length, recipients: allRecipients };
 }
 
 module.exports = { sendWhatsAppMessage, sendBulkWhatsAppAlerts };
