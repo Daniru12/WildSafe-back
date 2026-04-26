@@ -91,6 +91,44 @@ const assignResource = async (req, res) => {
     }
 };
 
+const releaseResource = async (req, res) => {
+    try {
+        const resource = await Resource.findById(req.params.id);
+        if (!resource) return res.status(404).json({ message: 'Resource not found' });
+
+        if (resource.status !== 'ASSIGNED') {
+            return res.status(409).json({ message: 'Resource is not currently assigned' });
+        }
+
+        if (req.user?.role === 'OFFICER') {
+            const staff = await Staff.findOne({ userId: req.user._id });
+            if (!staff) {
+                return res.status(403).json({ message: 'Only assigned officer can release this resource' });
+            }
+
+            if (!resource.assignedTo || resource.assignedTo.toString() !== staff._id.toString()) {
+                return res.status(403).json({ message: 'Only assigned officer can release this resource' });
+            }
+        }
+
+        resource.assignedTo = null;
+        resource.status = 'AVAILABLE';
+        await resource.save();
+
+        const populated = await Resource.findById(resource._id).populate({
+            path: 'assignedTo',
+            populate: {
+                path: 'userId',
+                select: 'name email role'
+            }
+        });
+
+        res.json(populated);
+    } catch (err) {
+        res.status(500).json({ message: 'Server error', error: err.message });
+    }
+};
+
 const updateResource = async (req, res) => {
     try {
         const updates = req.body;
@@ -112,4 +150,4 @@ const archiveResource = async (req, res) => {
     }
 };
 
-module.exports = { createResource, listResources, getResource, assignResource, updateResource, archiveResource };
+module.exports = { createResource, listResources, getResource, assignResource, releaseResource, updateResource, archiveResource };

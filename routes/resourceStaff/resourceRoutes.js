@@ -7,6 +7,7 @@ router.post('/', authMiddleware, roleMiddleware(['ADMIN','OFFICER']), resourceCo
 router.get('/', authMiddleware, resourceController.listResources);
 router.get('/:id', authMiddleware, resourceController.getResource);
 router.put('/:id/assign', authMiddleware, roleMiddleware(['ADMIN','OFFICER']), resourceController.assignResource);
+router.put('/:id/release', authMiddleware, roleMiddleware(['ADMIN','OFFICER']), resourceController.releaseResource);
 router.put('/:id', authMiddleware, roleMiddleware(['ADMIN','OFFICER']), resourceController.updateResource);
 router.delete('/:id', authMiddleware, roleMiddleware(['ADMIN']), resourceController.archiveResource);
 

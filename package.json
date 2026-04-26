@@ -11,7 +11,10 @@
     "test:coverage": "jest --coverage",
     "test:integration": "jest --testPathPatterns=tests/notification/.*\\.integration\\.test\\.js$",
     "test:performance": "jest --testPathPatterns=tests/notification/.*\\.performance\\.test\\.js$",
-    "test:notif-alert-awareness": "npm run test:integration && npm run test:performance"
+    "test:notif-alert-awareness": "npm run test:integration && npm run test:performance",
+    "test:integration:resource-staff": "jest tests/resourceStaff/resourceStaff.integration.test.js --runInBand",
+    "test:perf:resource-staff": "node tests/performance/resourceStaff.performance.js",
+    "test:resource-staff": "npm run test:integration:resource-staff && npm run test:perf:resource-staff"
   },
   "repository": {
     "type": "git",
